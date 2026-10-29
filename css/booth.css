@@ -4,6 +4,7 @@
   --ink: #161514;
   --mute: #75736d;
   --hair: #b9b7b0;
+  --vf-tint: rgba(0,0,0,.028);
   --body: #f4f3ef;
   --body-2: #e9e7e2;
   --accent: #ff5a1f;
@@ -150,7 +151,10 @@ button { font: inherit; color: inherit; }
 
 /* ---------- board (torn receipts) ---------- */
 .board { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
-body.narrow .board { z-index: 12; }
+/* a receipt being dragged rides above everything; it goes back under the preview when let go */
+.drag-layer { position: fixed; inset: 0; z-index: 28; pointer-events: none; }
+/* phones: torn receipts fly under the preview and the printer, like paper slipped under the screen */
+body.narrow .flying { z-index: 5; }
 .item { pointer-events: auto; }
 .item.settle { transition: left .38s cubic-bezier(.2,.8,.2,1), top .38s cubic-bezier(.2,.8,.2,1); }
 .item {
@@ -177,28 +181,46 @@ body.narrow .board { z-index: 12; }
 .stage { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
 
 .viewfinder {
+  /* frame geometry; layout() snaps these to whole device pixels */
+  --vf-gap: 12px;    /* preview edge → crop marks */
+  --vf-arm: 18px;    /* crop mark length */
+  --vf-line: 1px;    /* crop mark stroke */
   position: absolute; left: 50%; top: 0;
   isolation: isolate;
   transition: opacity .45s ease;
 }
-.viewfinder::before { /* solid window: nothing on the table shows through the live preview */
-  content: ""; position: absolute; inset: -14px -14px -40px; z-index: -1;
+.viewfinder::before { /* solid screen exactly under the picture: receipts slide under it and never show through */
+  content: ""; position: absolute; inset: 0; z-index: -1;
   background: var(--page-bg) fixed;
+  pointer-events: auto;
 }
 .viewfinder.hidden { opacity: 0; pointer-events: none; }
 .preview {
   display: block; width: 100%; height: 100%;
   image-rendering: pixelated; image-rendering: crisp-edges;
 }
-.crop { position: absolute; width: 16px; height: 16px; border-color: var(--hair); border-style: solid; border-width: 0; }
-.crop.tl { left: -10px; top: -10px; border-left-width: 1px; border-top-width: 1px; }
-.crop.tr { right: -10px; top: -10px; border-right-width: 1px; border-top-width: 1px; }
-.crop.bl { left: -10px; bottom: -10px; border-left-width: 1px; border-bottom-width: 1px; }
-.crop.br { right: -10px; bottom: -10px; border-right-width: 1px; border-bottom-width: 1px; }
-.vf-meta {
-  position: absolute; left: -10px; bottom: -32px;
-  font-size: 10px; letter-spacing: .1em; color: var(--mute); text-transform: uppercase; white-space: nowrap;
+.viewfinder.has-source .preview { background: #f5f4f0; }   /* the paper: a crisp edge even where the picture is white */
+.crop {
+  position: absolute; width: var(--vf-arm); height: var(--vf-arm);
+  border: 0 solid var(--hair); pointer-events: none;
 }
+.crop.tl { left: calc(var(--vf-gap) * -1); top: calc(var(--vf-gap) * -1); border-left-width: var(--vf-line); border-top-width: var(--vf-line); }
+.crop.tr { right: calc(var(--vf-gap) * -1); top: calc(var(--vf-gap) * -1); border-right-width: var(--vf-line); border-top-width: var(--vf-line); }
+.crop.bl { left: calc(var(--vf-gap) * -1); bottom: calc(var(--vf-gap) * -1); border-left-width: var(--vf-line); border-bottom-width: var(--vf-line); }
+.crop.br { right: calc(var(--vf-gap) * -1); bottom: calc(var(--vf-gap) * -1); border-right-width: var(--vf-line); border-bottom-width: var(--vf-line); }
+/* caption row: starts at the left crop mark, ends at the right one */
+.vf-meta {
+  position: absolute; left: calc(var(--vf-gap) * -1); right: calc(var(--vf-gap) * -1);
+  top: calc(100% + var(--vf-gap) + 11px);
+  display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+  font-size: 10px; line-height: 12px; letter-spacing: .12em; color: var(--mute);
+  text-transform: uppercase; white-space: nowrap; font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.vf-meta > span { overflow: hidden; text-overflow: ellipsis; }
+.vf-res { flex: none; opacity: .65; }
+.vf-res:empty, .viewfinder:not(.has-source) .vf-res { display: none; }
+@media (max-width: 520px) { .vf-res { display: none; } }
 .vf-count {
   position: absolute; inset: 0; display: grid; place-items: center;
   font-size: clamp(72px, 16vh, 160px); font-weight: 500; color: var(--accent);
@@ -211,7 +233,7 @@ body.narrow .board { z-index: 12; }
 .vf-empty {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-  border: 1px dashed var(--hair);
+  background: var(--vf-tint);
   pointer-events: auto; text-align: center; padding: 20px;
 }
 .vf-empty[hidden] { display: none; }
@@ -223,10 +245,10 @@ body.narrow .board { z-index: 12; }
 }
 .vf-empty.waking > * { opacity: 0; pointer-events: none; }
 .vf-empty.waking::after { opacity: 1; animation: vf-dots 1.2s steps(4) infinite; }
-.vf-empty.waking { animation: vf-breathe 1.4s ease-in-out infinite; }
+.viewfinder:has(.vf-empty.waking) .crop { animation: vf-breathe 1.4s ease-in-out infinite; }
 .vf-empty.leaving { opacity: 0; transform: scale(.985); pointer-events: none; transition-duration: .18s; }
 .vf-empty.leaving::after { opacity: 0; transition: opacity .12s; }
-@keyframes vf-breathe { 50% { border-color: #8f8d87; } }
+@keyframes vf-breathe { 50% { border-color: var(--mute); } }
 @keyframes vf-dots { 0% { content: "WARMING UP"; } 25% { content: "WARMING UP."; } 50% { content: "WARMING UP.."; } 75% { content: "WARMING UP..."; } }
 
 .vf-scan {
@@ -514,7 +536,7 @@ body.narrow .board { z-index: 12; }
   .hud-bottom .hud-btn[hidden] { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .viewfinder.reveal .preview, .viewfinder.reveal .vf-scan, .viewfinder.reveal .crop, .vf-empty.waking { animation: none; }
+  .viewfinder.reveal .preview, .viewfinder.reveal .vf-scan, .viewfinder.reveal .crop, .viewfinder .crop { animation: none; }
   .kofi img, .kofi-tip { animation: none; }
   .knob, .viewfinder { transition: none; }
 }
@@ -526,6 +548,7 @@ body.narrow .board { z-index: 12; }
   color-scheme: dark;
   --bg: #151514; --bg-2: #0e0e0d;
   --ink: #ecebe6; --on-ink: #151514; --mute: #8b8984; --hair: #4b4a46;
+  --vf-tint: rgba(255,255,255,.03);
   --page-bg: radial-gradient(120% 80% at 50% 38%, #1e1e1c 0%, #151514 55%, #0d0d0c 100%);
   --hover: rgba(255,255,255,.07);
   --lb-bg: rgba(13,13,12,.84);

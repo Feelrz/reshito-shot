@@ -15,7 +15,7 @@ const MAX_BOARD = 18;
 const el = {
   stage: $('stage'), board: $('board'), track: $('track'), printer: $('printer'),
   viewfinder: $('viewfinder'), preview: $('preview'), countdown: $('countdown'),
-  vfEmpty: $('vfEmpty'), vfNote: $('vfNote'), vfMeta: $('vfMeta'), startBtn: $('startBtn'),
+  vfEmpty: $('vfEmpty'), vfNote: $('vfNote'), vfMeta: $('vfMeta'), vfRes: $('vfRes'), startBtn: $('startBtn'),
   file1: $('fileInput'), file2: $('fileInput2'), lcd1: $('lcd1'), lcd2: $('lcd2'), led: $('led'),
   printBtn: $('printBtn'), modeSwitch: $('modeSwitch'), bgSwitch: $('bgSwitch'), bgRow: $('bgRow'), bgState: $('bgState'), soundBtn: $('soundBtn'), count: $('count'), themeBtn: $('themeBtn'), toggles: $('toggles'), counterBox: $('counterBox'),
   hint: $('hint'), flash: $('flash'), video: $('video'), camBtn: $('camBtn'),
@@ -75,14 +75,23 @@ function layout() {
   let pH = Math.min(prevAvail * 0.94, 560);
   let pW = pH * 0.8;
   if (pW > vw - 56) { pW = vw - 56; pH = pW * 1.25; }
+  // every thermal dot is a whole number of screen pixels, and the frame sits on the pixel grid:
+  // dots stay even and the crop marks / caption stay sharp at any zoom (1×, 1.25×, 1.5×, 2×, 3×)
   const dpr = window.devicePixelRatio || 1;
-  const dotCss = dpr >= 2 ? 1.5 : 2;
-  const dotsW = Math.max(80, Math.round(pW / dotCss));
+  const snap = (v) => Math.round(v * dpr) / dpr;
+  const devDot = Math.max(2, Math.round((dpr >= 2 ? 1.5 : 2) * dpr));
+  const dotCss = devDot / dpr;
+  const dotsW = Math.max(80, Math.floor(pW / dotCss));
   const dotsH = Math.round(dotsW * 1.25);
   pW = dotsW * dotCss; pH = dotsH * dotCss;
-  const pTop = topPad + Math.max(0, (prevAvail - pH) / 2);
+  const pTop = snap(topPad + Math.max(0, (prevAvail - pH) / 2));
+  const pLeft = snap((vw - pW) / 2);
 
-  Object.assign(el.viewfinder.style, { width: pW + 'px', height: pH + 'px', top: pTop + 'px', left: (vw - pW) / 2 + 'px' });
+  Object.assign(el.viewfinder.style, { width: pW + 'px', height: pH + 'px', top: pTop + 'px', left: pLeft + 'px' });
+  el.viewfinder.style.setProperty('--vf-gap', snap(12) + 'px');
+  el.viewfinder.style.setProperty('--vf-arm', snap(18) + 'px');
+  el.viewfinder.style.setProperty('--vf-line', Math.max(1, Math.round(dpr)) / dpr + 'px');
+  if (el.vfRes) el.vfRes.textContent = `${dotsW} × ${dotsH} dots`;
   el.track.style.height = slotY + 'px';
   if (el.preview.width !== dotsW || el.preview.height !== dotsH) {
     el.preview.width = dotsW; el.preview.height = dotsH;
@@ -91,7 +100,7 @@ function layout() {
   const centerW = Math.max(PRINTER_W * k, pW + 40) + 32;
   const narrow = (vw - centerW) / 2 < 150;
   const changed = S.L && S.L.narrow !== narrow;
-  S.L = { vw, vh, k, slotY, slotW, s, pW, pH, centerW, topPad, availH, narrow };
+  S.L = { vw, vh, k, slotY, slotW, s, pW, pH, pTop, pLeft, centerW, topPad, availH, narrow };
   document.body.classList.toggle('narrow', narrow);
 
   for (const it of S.items) {
@@ -693,6 +702,12 @@ function halfWidth(w, h, rotDeg) {
   return (w * Math.cos(r) + h * Math.sin(r)) / 2;
 }
 
+// phones: a receipt sits at the screen edge with its inner side tucked a little under the preview
+function narrowX(left, bw) {
+  const { pLeft, pW } = S.L;
+  return left ? pLeft + rnd(8, 18) - bw / 2 : pLeft + pW - rnd(8, 18) + bw / 2;
+}
+
 function pickSpot(rec, bw, bh, rot = 0) {
   const { vw, vh, centerW, narrow } = S.L;
   const cL = vw / 2 - centerW / 2, cR = vw / 2 + centerW / 2;
@@ -707,8 +722,11 @@ function pickSpot(rec, bw, bh, rot = 0) {
       x = rnd(Math.min(lo, hi), Math.max(lo, hi));
       y = rnd(Math.min(64 + bh * 0.5, vh / 2), Math.max(vh / 2, vh - 64 - bh * 0.55));
     } else {
-      x = left ? rnd(-bw * 0.32, -bw * 0.24) : vw + rnd(bw * 0.24, bw * 0.32);
-      y = rnd(80 + bh * 0.25, Math.max(90 + bh * 0.25, vh * 0.55));
+      x = narrowX(left, bw);
+      // fully beside the picture: nothing pokes out above it or under the caption
+      const { pTop, pH } = S.L;
+      const lo = pTop + bh / 2 + 8, hi = pTop + pH - bh / 2 - 8;
+      y = lo <= hi ? rnd(lo, hi) : pTop + pH / 2;
     }
     let score = Math.random() * 400;
     for (const it of S.items) {
@@ -723,10 +741,20 @@ function pickSpot(rec, bw, bh, rot = 0) {
 
 // push an item out of the centre column (live preview + printer) if it wandered in
 function keepClear(it, animate) {
-  if (!S.L || S.L.narrow) return false;
+  if (!S.L) return false;
   const { vw, centerW } = S.L;
-  const cL = vw / 2 - centerW / 2, cR = vw / 2 + centerW / 2;
   const hw = halfWidth(it.w, it.h, it.rot);
+  if (S.L.narrow) {
+    // phones: receipts tuck under the preview; one that is completely hidden goes back to the screen edge
+    const { pLeft, pTop, pW, pH } = S.L, m = 12;
+    const hh = Math.max(it.h, it.w) / 2;
+    const hidden = it.x - hw >= pLeft - m && it.x + hw <= pLeft + pW + m && it.y - hh >= pTop - m && it.y + hh <= pTop + pH + m;
+    if (!hidden) return false;
+    it.x = narrowX(it.x < vw / 2, it.w);
+    placeItem(it, animate);
+    return true;
+  }
+  const cL = vw / 2 - centerW / 2, cR = vw / 2 + centerW / 2;
   if (it.x + hw <= cL || it.x - hw >= cR) return false;
   it.x = it.x < vw / 2 ? cL - hw - 10 : cR + hw + 10;
   placeItem(it, animate);
@@ -768,28 +796,43 @@ function removeItem(it) {
   S.items = S.items.filter((x) => x !== it);
 }
 
+let dragLayer = null;
 function bindDrag(it) {
   const n = it.node;
-  let sx = 0, sy = 0, ox = 0, oy = 0, active = false, moved = false;
+  let sx = 0, sy = 0, ox = 0, oy = 0, pid = 0, active = false, moved = false, backT = 0;
+  // while held, the receipt rides above the preview and the printer instead of being cut by them
+  const lift = () => {
+    clearTimeout(backT);
+    if (!dragLayer) { dragLayer = document.createElement('div'); dragLayer.className = 'drag-layer'; document.body.appendChild(dragLayer); }
+    if (n.parentElement !== dragLayer) { dragLayer.appendChild(n); try { n.setPointerCapture(pid); } catch {} }
+  };
+  const putBack = () => {
+    clearTimeout(backT);
+    backT = setTimeout(() => { if (n.isConnected && n.parentElement === dragLayer && !active) el.board.appendChild(n); }, 440);
+  };
   n.addEventListener('pointerdown', (e) => {
-    active = true; moved = false; sx = e.clientX; sy = e.clientY; ox = it.x; oy = it.y;
+    active = true; moved = false; sx = e.clientX; sy = e.clientY; ox = it.x; oy = it.y; pid = e.pointerId;
     n.style.zIndex = ++S.z;
     try { n.setPointerCapture(e.pointerId); } catch {}
   });
   n.addEventListener('pointermove', (e) => {
     if (!active) return;
     const dx = e.clientX - sx, dy = e.clientY - sy;
-    if (!moved && Math.hypot(dx, dy) > 5) { moved = true; n.classList.add('dragging'); }
+    if (!moved && Math.hypot(dx, dy) > 5) { moved = true; n.classList.add('dragging'); lift(); }
     if (moved) { it.x = ox + dx; it.y = oy + dy; placeItem(it); }
   });
   const up = () => {
     if (!active) return;
     active = false; n.classList.remove('dragging');
     if (!moved) openLightbox(it);
-    else keepClear(it, true);
+    else { keepClear(it, true); putBack(); }
   };
   n.addEventListener('pointerup', up);
-  n.addEventListener('pointercancel', () => { active = false; n.classList.remove('dragging'); keepClear(it, true); });
+  n.addEventListener('pointercancel', () => {
+    if (!active) return;
+    active = false; n.classList.remove('dragging');
+    keepClear(it, true); putBack();
+  });
 }
 
 /* =========================================================================
