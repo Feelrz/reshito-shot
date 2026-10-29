@@ -44,7 +44,7 @@ python3 -m http.server 8000
 ```
 
 ## Deploy (Vercel)
-Situs live: **https://reshito-shot.vercel.app/** — project Vercel di-link ke repo `Feelrz/Receipt-booth` (tanpa build step, Framework: *Other*, output = root). Setiap push ke `main` (termasuk **Publish** dari admin) otomatis ter-deploy dalam ±1 menit.
+Situs live: **https://reshito-shot.vercel.app/** — project Vercel di-link ke repo `Feelrz/reshito-shot` (dulu `Receipt-booth`) (tanpa build step, Framework: *Other*, output = root). Setiap push ke `main` (termasuk **Publish** dari admin) otomatis ter-deploy dalam ±1 menit.
 
 GitHub Pages juga tetap bisa: Repo → **Settings → Pages** → *Deploy from a branch* → `main` / `(root)`.
 
@@ -64,7 +64,7 @@ Buka `https://<situs-kamu>/#admin`. Admin **terkunci**: hanya terbuka dengan tok
 - Kalau token dicabut di GitHub, admin otomatis terkunci lagi saat dibuka berikutnya. Kalau sedang offline (laptop event), login terakhir tetap berlaku 30 hari.
 - Situs ini statis, jadi kodenya publik. Yang benar-benar menjaga situs adalah GitHub: tanpa token yang punya izin tulis ke repo, **tidak ada yang bisa mengubah struk** untuk pengunjung lain.
 
-**Domain sendiri / Netlify / Vercel**: `SITE_REPO` di `js/config.js` sudah diisi `'Feelrz/Receipt-booth'`. Kalau repo pindah/ganti nama, ubah di situ. Tanpa itu, admin tertutup total di alamat tersebut.
+**Domain sendiri / Netlify / Vercel**: `SITE_REPO` di `js/config.js` sudah diisi `'Feelrz/reshito-shot'`. Kalau repo pindah/ganti nama, ubah di situ. Tanpa itu, admin tertutup total di alamat tersebut.
 **Lokal** (`localhost`): layar kunci menanyakan owner/repo + token.
 
 **Pakai admin**

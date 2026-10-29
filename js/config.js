@@ -3,7 +3,7 @@
 //
 // On GitHub Pages (https://<username>.github.io/<repo>/) this is detected automatically.
 // On a custom domain, Netlify or Vercel it has to be filled in.
-export const SITE_REPO = 'Feelrz/Receipt-booth';
+export const SITE_REPO = 'Feelrz/reshito-shot';
 export const SITE_BRANCH = '';   // empty = the repo's default branch
 export const SITE_DIR = '';      // folder that holds index.html inside the repo; empty = repo root
 
