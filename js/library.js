@@ -17,6 +17,7 @@ function normalize(r, origin) {
     w: r.w, h: r.h,
     zone: Array.isArray(r.zone) && r.zone.length === 4 ? r.zone.slice() : defaultZone(r.w, r.h),
     scale: r.scale || 1,
+    wm: typeof r.wm === 'number' ? r.wm : null,
     on: r.on !== false,
     set: r.set || origin,
     origin,

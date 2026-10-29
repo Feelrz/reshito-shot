@@ -1,5 +1,6 @@
 // Thermal print engine: tone → dither → dot gain → head artefacts → paper grain → torn edges → scan softness
 import { clamp, rnd, smooth, makeCanvas, prng } from './util.js';
+import { WATERMARK } from './config.js';
 
 export const INK = [24, 23, 25];          // thermal black (very slightly cool)
 export const DOT_REF = 2;                 // thermal dot size in receipt px (at scale 1)
@@ -127,14 +128,40 @@ export function tornPath(ctx, W, H, tw, td) {
 /* ---------------------------------------------------------------------- */
 export function photoBox(rec, W, H, jitter = 1) {
   const [zx, zy, zw, zh] = rec.zone;
+  const bottom = rec.wm != null ? rec.wm * H - H * 0.006 : H - H * 0.01;   // never over the watermark line
   let pw = zw * W * (1 + rnd(-0.04, 0.03) * jitter);
   let ph = pw * 1.25;
-  if (ph > H * 0.96) { ph = H * 0.96; pw = ph * 0.8; }
+  if (ph > bottom - H * 0.01) { ph = bottom - H * 0.01; pw = ph * 0.8; }
   let x = zx * W + (zw * W - pw) / 2 + rnd(-0.015, 0.015) * W * jitter;
   let y = zy * H + (zh * H - ph) / 2 + rnd(-0.012, 0.012) * H * jitter;
   x = clamp(x, W * 0.01, W - pw - W * 0.01);
-  y = clamp(y, H * 0.01, H - ph - H * 0.01);
+  y = clamp(y, H * 0.01, bottom - ph);
   return { x, y, w: pw, h: ph };
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Watermark: the site address, printed by the same head under the last    */
+/*  dotted line. Drawn before the print artefacts so it fades with the rest */
+/* ---------------------------------------------------------------------- */
+const MONO = 'ui-monospace, "SFMono-Regular", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace';
+export function drawWatermark(ctx, rec, W, H, text = WATERMARK) {
+  if (!text || rec.wm == null) return;
+  const lineY = rec.wm * H;
+  const room = H - lineY;
+  if (room < H * 0.03) return;
+  let fs = clamp(W * 0.026, 15, 34);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = 'rgb(78,77,80)';
+  const font = () => { ctx.font = `500 ${fs.toFixed(1)}px ${MONO}`; };
+  font();
+  const maxW = W * 0.8;
+  const tw = ctx.measureText(text).width;
+  if (tw > maxW) { fs *= maxW / tw; font(); }
+  if ('letterSpacing' in ctx) ctx.letterSpacing = `${(fs * 0.04).toFixed(2)}px`;
+  ctx.fillText(text, W / 2, lineY + Math.min(fs * 1.55, room * 0.42));
+  ctx.restore();
 }
 
 /* ---------------------------------------------------------------------- */
@@ -153,6 +180,7 @@ export function composePrint(shot, rec, img, opts = {}) {
   const [base, bctx] = makeCanvas(W, H, { willReadFrequently: true });
   bctx.imageSmoothingQuality = 'high';
   bctx.drawImage(img, 0, 0, W, H);
+  if (opts.watermark !== false) drawWatermark(bctx, rec, W, H);
   const id = bctx.getImageData(0, 0, W, H);
   const px = id.data;
 

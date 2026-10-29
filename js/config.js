@@ -1,9 +1,9 @@
 // Which GitHub repository this site is published from.
 // Only someone with write access to this repo can open the admin panel.
 //
-// On GitHub Pages (https://<username>.github.io/<repo>/) this is detected automatically: leave it empty.
-// On a custom domain, Netlify or Vercel, fill it in, e.g. SITE_REPO = 'nafil/receipt-booth'.
-export const SITE_REPO = '';
+// On GitHub Pages (https://<username>.github.io/<repo>/) this is detected automatically.
+// On a custom domain, Netlify or Vercel it has to be filled in.
+export const SITE_REPO = 'Feelrz/Receipt-booth';
 export const SITE_BRANCH = '';   // empty = the repo's default branch
 export const SITE_DIR = '';      // folder that holds index.html inside the repo; empty = repo root
 
@@ -17,3 +17,6 @@ export const COUNTER = {
 };
 
 export const CREDIT = { label: 'made by NAV', url: 'https://www.instagram.com/not.a.vision/' };
+
+// Printed under the small dotted line at the bottom of every receipt. Empty string = no watermark.
+export const WATERMARK = 'https://reshito-shot.vercel.app/';

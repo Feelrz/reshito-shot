@@ -109,6 +109,13 @@ body.admin-open { overflow: hidden; }
   cursor: move; display: grid; place-items: center;
 }
 .ad-zone span { font-size: 10px; letter-spacing: .14em; color: var(--accent); font-weight: 500; pointer-events: none; }
+.ad-wmline {
+  position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed rgba(0,0,0,.45); pointer-events: none;
+}
+.ad-wmline[hidden] { display: none; }
+.ad-wmline span {
+  position: absolute; right: 6px; top: 4px; font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: rgba(0,0,0,.5);
+}
 .ad-handle {
   position: absolute; right: -8px; bottom: -8px; width: 16px; height: 16px; border-radius: 50%;
   background: #fff; border: 1.5px solid var(--accent); cursor: nwse-resize;

@@ -53,7 +53,7 @@ function build() {
       <div class="ad-drop-inner">
         <strong>Drop receipt images here</strong>
         <span>or <button class="ad-link" id="adPick" type="button">choose files</button> · PNG, JPG or WebP · as many as you like</span>
-        <small>Every receipt is straightened, cropped and read automatically to find where the photo prints. Receipts with coloured pictures are added switched off.</small>
+        <small>Every receipt is straightened, cropped and read automatically to find where the photo prints. The site address prints under the small dotted line at the bottom (one is added if the receipt has none). Receipts with coloured pictures are added switched off.</small>
       </div>
       <ol class="ad-queue" id="adQueue"></ol>
     </section>
@@ -84,6 +84,7 @@ function build() {
         <div class="ad-stage" id="edStage">
           <img id="edImg" alt="">
           <div class="ad-zone" id="edZone"><span>PHOTO</span><i class="ad-handle" id="edHandle"></i></div>
+          <div class="ad-wmline" id="edWm" hidden><span>watermark prints here</span></div>
         </div>
         <img id="edTest" class="ad-test" alt="Test print" hidden>
       </div>
@@ -270,13 +271,14 @@ async function handleFiles(files) {
       while (existing.has(id)) id = 'u-' + slug(f.name).slice(0, 18) + '-' + Math.random().toString(36).slice(2, 5);
       existing.add(id);
       const rec = {
-        id, file: `${id}.${res.ext}`, w: res.w, h: res.h, zone: res.zone, scale: res.scale,
+        id, file: `${id}.${res.ext}`, w: res.w, h: res.h, zone: res.zone, wm: res.wm, scale: res.scale,
         on: !res.colorArt, colorArt: res.colorArt, set: 'upload', blob: res.blob, type: res.type,
         added: Date.now(), published: false, name: f.name,
       };
       await DB.put('receipts', rec);
       const notes = [`${res.w}×${res.h}`];
       if (Math.abs(res.skew) >= 0.15) notes.push(`straightened ${res.skew.toFixed(1)}°`);
+      if (res.addedStrip) notes.push('watermark strip added');
       if (res.scale !== 1) notes.push(`size ×${res.scale}`);
       if (res.colorArt) notes.push('coloured picture → switched off');
       li.querySelector('em').textContent = 'ready · ' + notes.join(' · ');
@@ -327,14 +329,18 @@ function closeEditor() {
 function drawZone() {
   const [x, y, w, h] = ed.zone;
   Object.assign($('edZone').style, { left: x * 100 + '%', top: y * 100 + '%', width: w * 100 + '%', height: h * 100 + '%' });
+  const wl = $('edWm');
+  wl.hidden = ed.r.wm == null;
+  if (ed.r.wm != null) wl.style.top = ed.r.wm * 100 + '%';
 }
 
 function fixZone(z, r) {
   let [x, y, w] = z;
+  const bottom = r.wm != null ? r.wm - 0.006 : 1;          // the photo stays above the watermark line
   w = clamp(w, 0.25, 1);
   let h = (w * 1.25 * r.w) / r.h;
-  if (h > 1) { h = 1; w = (h * r.h) / (1.25 * r.w); }
-  x = clamp(x, 0, 1 - w); y = clamp(y, 0, 1 - h);
+  if (h > bottom) { h = bottom; w = (h * r.h) / (1.25 * r.w); }
+  x = clamp(x, 0, 1 - w); y = clamp(y, 0, bottom - h);
   return [x, y, w, h].map((v) => Math.round(v * 10000) / 10000);
 }
 
@@ -366,7 +372,7 @@ function bindZoneDrag() {
 function autoPlace() {
   if (!ed) return;
   const img = $('edImg');
-  ed.zone = fixZone(autoZone(img, ed.r.w, ed.r.h), ed.r);
+  ed.zone = fixZone(autoZone(img, ed.r.w, ed.r.h, ed.r.wm), ed.r);
   drawZone();
   $('edNote').textContent = 'Placed automatically.';
   if (!$('edTest').hidden) runTest();
@@ -469,6 +475,7 @@ function openSettings() { fillSettings(); $('setNote').textContent = ''; $('adSe
 
 const entryOf = (r) => {
   const e = { id: r.id, file: r.file, w: r.w, h: r.h, zone: r.zone, set: r.set || 'upload' };
+  if (r.wm != null) e.wm = r.wm;
   if (r.scale && r.scale !== 1) e.scale = r.scale;
   if (r.on === false) e.on = false;
   return e;

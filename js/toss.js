@@ -86,6 +86,61 @@ function makeBall(srcImg, S) {
   return c;
 }
 
+/* ---------- crumpling: silhouette morph + creases drawn over the flat receipt ---------- */
+const N_PTS = 24;
+// points around the rectangle (in %), clockwise from the top-left corner
+function rectPts() {
+  const pts = [];
+  for (let i = 0; i < N_PTS; i++) {
+    const t = (i / N_PTS) * 4, side = Math.floor(t), f = t - side;
+    pts.push(side === 0 ? [f * 100, 0] : side === 1 ? [100, f * 100] : side === 2 ? [100 - f * 100, 100] : [0, 100 - f * 100]);
+  }
+  return pts;
+}
+// the same points pulled toward a lumpy ellipse; amt 0 = flat sheet, 1 = ball
+function crumplePts(base, amt, lumps) {
+  return base.map(([x, y], i) => {
+    const a = Math.atan2(y - 50, x - 50);
+    const r = 50 * lumps[i];
+    const tx = 50 + Math.cos(a) * r, ty = 50 + Math.sin(a) * r;
+    const j = (1 - amt) * amt * 14 * (lumps[(i + 7) % N_PTS] - 0.85);   // ragged while it folds
+    return [x + (tx - x) * amt + j, y + (ty - y) * amt - j];
+  });
+}
+const poly = (pts) => `polygon(${pts.map(([x, y]) => `${x.toFixed(1)}% ${y.toFixed(1)}%`).join(',')})`;
+
+function makeCreases(w, h) {
+  const [c, ctx] = makeCanvas(Math.round(w), Math.round(h));
+  const lines = 26;
+  for (let k = 0; k < lines; k++) {
+    // a crease: a fold line with a dark side and a light side
+    const x0 = rnd(-0.1, 1.1) * w, y0 = rnd(-0.1, 1.1) * h;
+    const a = rnd(0, Math.PI), len = rnd(0.35, 0.9) * Math.max(w, h);
+    const dx = Math.cos(a) * len, dy = Math.sin(a) * len;
+    const nx = -Math.sin(a), ny = Math.cos(a), wd = rnd(10, 34);
+    const g = ctx.createLinearGradient(x0, y0, x0 + nx * wd, y0 + ny * wd);
+    g.addColorStop(0, `rgba(25,22,18,${rnd(0.1, 0.2).toFixed(3)})`);
+    g.addColorStop(1, 'rgba(25,22,18,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(x0 - dx / 2, y0 - dy / 2); ctx.lineTo(x0 + dx / 2, y0 + dy / 2);
+    ctx.lineTo(x0 + dx / 2 + nx * wd, y0 + dy / 2 + ny * wd); ctx.lineTo(x0 - dx / 2 + nx * wd, y0 - dy / 2 + ny * wd); ctx.fill();
+    const g2 = ctx.createLinearGradient(x0, y0, x0 - nx * wd * 0.7, y0 - ny * wd * 0.7);
+    g2.addColorStop(0, `rgba(255,255,255,${rnd(0.25, 0.45).toFixed(3)})`);
+    g2.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g2;
+    ctx.beginPath(); ctx.moveTo(x0 - dx / 2, y0 - dy / 2); ctx.lineTo(x0 + dx / 2, y0 + dy / 2);
+    ctx.lineTo(x0 + dx / 2 - nx * wd * 0.7, y0 + dy / 2 - ny * wd * 0.7); ctx.lineTo(x0 - dx / 2 - nx * wd * 0.7, y0 - dy / 2 - ny * wd * 0.7); ctx.fill();
+    ctx.strokeStyle = 'rgba(30,26,22,.16)'; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(x0 - dx / 2, y0 - dy / 2); ctx.lineTo(x0 + dx / 2, y0 + dy / 2); ctx.stroke();
+  }
+  // squashed paper is darker at the edges
+  const v = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.15, w / 2, h / 2, Math.max(w, h) * 0.62);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(20,18,15,.28)');
+  ctx.fillStyle = v; ctx.fillRect(0, 0, w, h);
+  c.className = 'paper-creases';
+  return c;
+}
+
 /* ---------- wastebasket ---------- */
 // One element: inside, back rim, a slot for the ball, the frosted body and the front rim all move together.
 function makeBin() {
@@ -120,16 +175,26 @@ export async function crumpleAndToss(img) {
   const by = vh - bin.h - (narrow ? 26 : 44);
   bin.el.style.left = bx + 'px'; bin.el.style.top = by + 'px';
   const binIn = bin.el.animate([{ transform: 'translateY(180px)', opacity: 0 }, { transform: 'translateY(0)', opacity: 1 }], { duration: 520, easing: 'cubic-bezier(.2,.9,.3,1.15)', fill: 'forwards' });
-  // 1) crumple the flat receipt (starts right away; the ball is built while it runs)
+  // 1) crumple the flat receipt (starts right away; the ball is built while it runs):
+  //    it squeezes, its outline goes ragged and lumpy, and creases darken in over it
   Sound.crumple();
   const kx = S / r.width, ky = S / r.height;
-  const crush = img.animate([
-    { transform: 'none', borderRadius: '0%' },
-    { transform: 'scale(.97,.9) rotate(-2deg) skewX(3deg)', offset: 0.16 },
-    { transform: 'scale(.86,.66) rotate(4deg) skewY(-4deg)', offset: 0.36 },
-    { transform: `scale(${(kx * 2.1).toFixed(3)},${(ky * 2.4).toFixed(3)}) rotate(-8deg) skewX(-6deg)`, borderRadius: '28%', offset: 0.62 },
-    { transform: `scale(${(kx * 1.15).toFixed(3)},${(ky * 1.15).toFixed(3)}) rotate(16deg)`, borderRadius: '50%' },
-  ], { duration: 680, easing: 'cubic-bezier(.45,0,.55,1)', fill: 'forwards' });
+  const base = rectPts(), lumps = base.map(() => rnd(0.74, 0.98));
+  const shapes = [0, 0.12, 0.42, 0.78, 1].map((a) => poly(crumplePts(base, a, lumps)));
+  const crushFrames = [
+    { transform: 'none', clipPath: shapes[0] },
+    { transform: 'scale(.97,.9) rotate(-2deg) skewX(3deg)', clipPath: shapes[1], offset: 0.16 },
+    { transform: 'scale(.86,.66) rotate(4deg) skewY(-4deg)', clipPath: shapes[2], offset: 0.36 },
+    { transform: `scale(${(kx * 2.1).toFixed(3)},${(ky * 2.4).toFixed(3)}) rotate(-8deg) skewX(-6deg)`, clipPath: shapes[3], offset: 0.62 },
+    { transform: `scale(${(kx * 1.15).toFixed(3)},${(ky * 1.15).toFixed(3)}) rotate(16deg)`, clipPath: shapes[4] },
+  ];
+  const crushOpts = { duration: 680, easing: 'cubic-bezier(.45,0,.55,1)', fill: 'forwards' };
+  const crush = img.animate(crushFrames, crushOpts);
+  const creases = makeCreases(r.width, r.height);
+  Object.assign(creases.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+  document.body.appendChild(creases);
+  creases.animate(crushFrames, crushOpts);
+  creases.animate([{ opacity: 0 }, { opacity: 0.55, offset: 0.25 }, { opacity: 1, offset: 0.6 }, { opacity: 1 }], crushOpts);
   await new Promise((res) => requestAnimationFrame(() => setTimeout(res, 30)));   // let the crumple start painting
   const ball = makeBall(img, S);
   ball.style.opacity = '0';
@@ -142,6 +207,7 @@ export async function crumpleAndToss(img) {
   ], { delay: Math.max(0, left - 190), duration: 200, easing: 'ease-out', fill: 'forwards' });
   await crush.finished.catch(() => {});
   img.style.visibility = 'hidden';
+  creases.remove();
   await sleep(40);
 
   // 2) a last squeeze in the hand
@@ -169,6 +235,7 @@ export async function crumpleAndToss(img) {
   await ball.animate(frames, { duration: 720, easing: 'cubic-bezier(.3,.05,.6,1)', fill: 'forwards' }).finished.catch(() => {});
   // 4) the ball moves into the bin itself (between the back rim and the frosted body) and drops in
   await binIn.finished.catch(() => {});
+  ball.style.opacity = '1';               // the fade-in is cancelled next; keep the ball visible in the bin
   for (const a of ball.getAnimations()) a.cancel();
   ball.classList.add('in-bin');
   const lx = ex - bx, ly = ey - by;
@@ -192,4 +259,5 @@ export async function crumpleAndToss(img) {
 export function resetImage(img) {
   for (const a of img.getAnimations()) a.cancel();
   img.style.visibility = '';
+  document.querySelectorAll('.paper-creases').forEach((n) => n.remove());
 }

@@ -12,10 +12,14 @@ Photobooth berbentuk printer struk thermal. Foto dicetak (dithering ala thermal)
   - Pilihan terakhir diingat di browser. Jalan untuk kamera **dan** foto upload. Model cut-out (MediaPipe Selfie Segmentation) sudah ikut di folder `vendor/`, tidak butuh CDN, bisa offline.
 - **Print realistis**: dot gain tinta, garis elemen head mati yang menembus teks + foto, banding feed kertas, tinta tidak rata, grain kertas, lalu sedikit soft seperti hasil scan.
 - **Print → feed → tear**: kertas keluar dari slot. Tarik ke atas atau tap untuk menyobek; kalau didiamkan, sobek otomatis.
-- **275 struk** bawaan (v3 + JP). Setiap struk punya *zona foto* otomatis: di area daftar item, di antara header toko dan barcode.
+- **325 struk** bawaan: 100 EN, 200 JP, 25 TH. Setiap struk punya *zona foto* otomatis: di bawah header toko (nama, alamat, tanggal tetap terbaca), di atas garis titik-titik paling bawah.
+- **Watermark**: di bawah garis titik-titik kecil paling bawah setiap struk tercetak `https://reshito-shot.vercel.app/`, ikut gaya cetak thermal (ikut pudar/bergaris seperti teks struk). Ganti atau matikan di `js/config.js` → `WATERMARK` (string kosong = tanpa watermark).
+- **Throw away**: struk diremas jadi bola kertas (lipatan + bayangan) lalu dilempar ke tong sampah kecil yang bergoyang sebagai satu kesatuan.
 - **Board**: struk yang disobek ditempel di meja, tidak pernah menutupi live preview. Tap untuk **Save PNG**.
 - **Admin panel** untuk menambah struk sendiri (lihat di bawah).
 - **Made by NAV** di tengah bawah (di HP di bawah tombol) → Instagram @not.a.vision.
+- Kotak kecil di samping nama **berkedip seperti lampu REC** kamera.
+- **Logo sementara**: favicon, ikon iPhone/Android (`icons/`, `favicon.ico`, `site.webmanifest`) dan gambar share `icons/og.png`.
 - Keyboard: `Space` = print / sobek, `F` = FOCUS/FULL, `B` = background on/off (di FOCUS), `Shift+A` = admin (hanya di device yang sudah login admin).
 
 ## Ko-fi
@@ -39,12 +43,10 @@ python3 -m http.server 8000
 # buka http://localhost:8000
 ```
 
-## Deploy (GitHub Pages)
-1. Push isi folder ini ke repo GitHub (`index.html` di root repo).
-2. Repo → **Settings → Pages** → *Deploy from a branch* → `main` / `(root)`.
-3. Buka `https://<username>.github.io/<repo>/`.
+## Deploy (Vercel)
+Situs live: **https://reshito-shot.vercel.app/** — project Vercel di-link ke repo `Feelrz/Receipt-booth` (tanpa build step, Framework: *Other*, output = root). Setiap push ke `main` (termasuk **Publish** dari admin) otomatis ter-deploy dalam ±1 menit.
 
-Netlify / Vercel juga bisa (tanpa build step). Kalau di-link ke repo GitHub, publish dari admin otomatis ikut ter-deploy.
+GitHub Pages juga tetap bisa: Repo → **Settings → Pages** → *Deploy from a branch* → `main` / `(root)`.
 
 ## Admin panel — tambah struk sendiri (terkunci, hanya kamu)
 Buka `https://<situs-kamu>/#admin`. Admin **terkunci**: hanya terbuka dengan token GitHub yang bisa *push* ke repo situs ini.
@@ -62,13 +64,14 @@ Buka `https://<situs-kamu>/#admin`. Admin **terkunci**: hanya terbuka dengan tok
 - Kalau token dicabut di GitHub, admin otomatis terkunci lagi saat dibuka berikutnya. Kalau sedang offline (laptop event), login terakhir tetap berlaku 30 hari.
 - Situs ini statis, jadi kodenya publik. Yang benar-benar menjaga situs adalah GitHub: tanpa token yang punya izin tulis ke repo, **tidak ada yang bisa mengubah struk** untuk pengunjung lain.
 
-**Domain sendiri / Netlify / Vercel**: isi `SITE_REPO` di `js/config.js`, misalnya `'nafil/receipt-booth'`. Tanpa itu, admin tertutup total di alamat tersebut.
+**Domain sendiri / Netlify / Vercel**: `SITE_REPO` di `js/config.js` sudah diisi `'Feelrz/Receipt-booth'`. Kalau repo pindah/ganti nama, ubah di situ. Tanpa itu, admin tertutup total di alamat tersebut.
 **Lokal** (`localhost`): layar kunci menanyakan owner/repo + token.
 
 **Pakai admin**
 1. **Upload**: drop gambar struk (PNG/JPG/WebP, boleh banyak sekaligus). Otomatis:
    - mencari kertas, meluruskan yang miring, crop;
-   - menentukan **zona foto** (kotak oranye) di area daftar item, menghindari header & barcode;
+   - menentukan **zona foto** (kotak oranye) di bawah header toko, di atas garis watermark;
+   - mencari **garis titik-titik paling bawah** untuk watermark; kalau struknya tidak punya, admin menambahkan strip kosong + garis titik-titik di bawahnya (garis putus-putus *watermark prints here* di editor);
    - menyesuaikan ukuran kalau resolusinya jauh beda;
    - struk yang punya **gambar berwarna** otomatis dimatikan (bisa dinyalakan manual).
 2. **Cek / ubah** (opsional): klik struk → geser kotak foto, tarik sudutnya untuk resize, `Auto-place` untuk mengulang deteksi, `Test print` untuk lihat hasil cetak.
@@ -82,11 +85,13 @@ css/booth.css, css/admin.css
 js/booth.js      booth: kamera, preview, print flow, board
 js/print.js      mesin cetak thermal (dither, dot gain, artefak head, sobekan)
 js/seg.js        cut-out orang (FOCUS)
-js/process.js    otomatis: luruskan, crop, zona foto, deteksi gambar berwarna
+js/process.js    otomatis: luruskan, crop, zona foto, garis watermark, deteksi gambar berwarna
+js/toss.js       animasi remas + buang ke tong sampah
 js/admin.js      admin panel · js/github.js publish · js/zip.js export
 js/auth.js       kunci admin (token GitHub) · js/config.js repo situs
 js/library.js    daftar struk (manifest + upload lokal)
-receipts/        manifest.json + gambar struk
+receipts/        manifest.json + gambar struk (en-*, jp-*, th-*)
+icons/           logo sementara (favicon, apple-touch, og)
 vendor/selfie_segmentation/   model MediaPipe (Apache-2.0)
 ```
 Parameter look ada di atas `js/print.js` (`DOT_REF` ukuran titik, `TOOTH_W_REF`/`TOOTH_D_REF` gerigi, `INK` warna tinta).
