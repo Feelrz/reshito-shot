@@ -5,6 +5,8 @@ import { Sound } from './sound.js';
 import { thermal, composePrint, INK } from './print.js';
 import { Library } from './library.js';
 import { crumpleAndToss, resetImage } from './toss.js';
+import { Counter } from './counter.js';
+import { createFlap } from './flap.js';
 
 // Printer geometry (unscaled px, must match booth.css)
 const PRINTER_W = 500, PRINTER_H = 196, SLOT_CY = 24, SLOT_W = PRINTER_W * 0.92;
@@ -15,7 +17,7 @@ const el = {
   viewfinder: $('viewfinder'), preview: $('preview'), countdown: $('countdown'),
   vfEmpty: $('vfEmpty'), vfNote: $('vfNote'), vfMeta: $('vfMeta'), startBtn: $('startBtn'),
   file1: $('fileInput'), file2: $('fileInput2'), lcd1: $('lcd1'), lcd2: $('lcd2'), led: $('led'),
-  printBtn: $('printBtn'), modeSwitch: $('modeSwitch'), bgSwitch: $('bgSwitch'), bgRow: $('bgRow'), bgState: $('bgState'), soundBtn: $('soundBtn'), count: $('count'),
+  printBtn: $('printBtn'), modeSwitch: $('modeSwitch'), bgSwitch: $('bgSwitch'), bgRow: $('bgRow'), bgState: $('bgState'), soundBtn: $('soundBtn'), count: $('count'), themeBtn: $('themeBtn'), toggles: $('toggles'), counterBox: $('counterBox'),
   hint: $('hint'), flash: $('flash'), video: $('video'), camBtn: $('camBtn'),
   lightbox: $('lightbox'), lbImg: $('lbImg'), lbSave: $('lbSave'), lbDelete: $('lbDelete'), lbClose: $('lbClose'), lbNote: $('lbNote'),
 };
@@ -51,8 +53,14 @@ function layout() {
   const k = clamp(Math.min((vw * 0.94) / PRINTER_W, (vh * 0.27) / PRINTER_H), 0.6, 1.1);
   // on narrow screens the footer sits in its own row under the printer
   const footer = document.querySelector('.hud-bottom');
-  const footerH = vw <= 760 && footer ? footer.getBoundingClientRect().height : 0;
-  const bottom = footerH ? footerH + 4 : clamp(vh * 0.045, 18, 44);
+  const narrowUI = vw <= 760;
+  if (el.toggles && footer) {
+    const home = narrowUI ? footer : el.counterBox.parentElement;
+    const before = narrowUI ? footer.querySelector('.hud-bottom-right') : el.counterBox;
+    if (el.toggles.parentElement !== home) home.insertBefore(el.toggles, before);
+  }
+  const footerH = narrowUI && footer ? footer.getBoundingClientRect().height : 0;
+  const bottom = footerH ? footerH + 4 : clamp(vh * 0.06, 44, 64);
   el.printer.style.setProperty('--k', k);
   el.printer.style.bottom = bottom + 'px';
 
@@ -213,6 +221,16 @@ function modeLabel() {
 }
 // what the thermal renderer gets: 'focus' = drop background, 'soft' = fade it, 'full' = no mask at all
 function renderMode() { return S.mode === 'full' ? 'full' : S.bg ? 'soft' : 'focus'; }
+function setTheme(t, save) {
+  S.dark = t === 'dark';
+  document.documentElement.dataset.theme = t;
+  el.themeBtn.setAttribute('aria-pressed', String(S.dark));
+  el.themeBtn.title = S.dark ? 'Light mode' : 'Dark mode';
+  el.themeBtn.setAttribute('aria-label', el.themeBtn.title);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = S.dark ? '#141413' : '#e8e7e3';
+  if (save) { try { localStorage.setItem('rb-theme', t); } catch {} }
+}
 function saveLook() { try { localStorage.setItem('rb-look', JSON.stringify({ mode: S.mode, bg: S.bg })); } catch {} }
 function loadLook() {
   try {
@@ -238,6 +256,7 @@ function setState(st) {
 }
 
 function refreshMeta() {
+  el.viewfinder.classList.toggle('has-source', !!S.source);
   let t;
   if (!S.source) t = 'NO SIGNAL';
   else {
@@ -285,7 +304,7 @@ function setBg(v) {
   refreshMode();
 }
 
-function updateCount() { const b = el.count.querySelector('b'); if (b) b.textContent = pad(S.printed); else el.count.textContent = `${pad(S.printed)} printed`; }
+function updateCount() { if (!el.count) return; const b = el.count.querySelector('b'); if (b) b.textContent = pad(S.printed); else el.count.textContent = `${pad(S.printed)} printed`; }
 
 /* ---------- Ko-fi ---------- */
 const kofiUrl = () => (document.getElementById('kofi') || {}).href || 'https://ko-fi.com/notavision';
@@ -452,6 +471,7 @@ async function runPrint() {
     const got = await Bag.take();
     const out = composePrint(shot, got.rec, got.img);
     S.printed += 1; updateCount();
+    Counter.hit();
     const job = { rec: got.rec, W: out.W, H: out.H, toothD: out.toothD, canvas: out.canvas, blob: null, url: null, n: S.printed };
     // encode in the background while the paper feeds
     job.ready = (async () => {
@@ -691,15 +711,42 @@ function bindDrag(it) {
 /* =========================================================================
    Lightbox + save
    ========================================================================= */
-function openLightbox(it) {
+const fromBoard = (it, to) => {
+  const s = it.w / to.width;
+  const dx = it.x - (to.left + to.width / 2), dy = it.y - (to.top + to.height / 2);
+  return `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) rotate(${(it.rot || 0).toFixed(2)}deg) scale(${s.toFixed(4)})`;
+};
+
+async function openLightbox(it) {
+  if (S.tossing || S.closing || !el.lightbox.hidden) return;
   S.lightboxItem = it;
+  resetImage(el.lbImg);
   el.lbImg.src = it.job.url;
   el.lbNote.textContent = `№${pad(it.job.n, 4)} · receipt ${it.job.rec.id} · ${it.job.W}×${it.job.H}px`;
+  el.lightbox.classList.add('pre');
   el.lightbox.hidden = false;
+  try { await el.lbImg.decode(); } catch {}
+  const to = el.lbImg.getBoundingClientRect();
+  it.node.style.visibility = 'hidden';
+  el.lbImg.animate([{ transform: fromBoard(it, to) }, { transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.2,.85,.25,1)' });
+  requestAnimationFrame(() => el.lightbox.classList.remove('pre'));
 }
-function closeLightbox() {
-  if (S.tossing) return;
-  el.lightbox.hidden = true; S.lightboxItem = null;
+
+async function closeLightbox() {
+  if (S.tossing || S.closing || el.lightbox.hidden) return;
+  S.closing = true;
+  const it = S.lightboxItem;
+  el.lightbox.classList.add('pre');
+  if (it && it.node.isConnected) {
+    const to = el.lbImg.getBoundingClientRect();
+    await el.lbImg.animate([{ transform: 'none' }, { transform: fromBoard(it, to) }], { duration: 400, easing: 'cubic-bezier(.45,0,.2,1)', fill: 'forwards' }).finished.catch(() => {});
+    it.node.style.visibility = '';
+  } else await sleep(220);
+  el.lightbox.hidden = true;
+  el.lightbox.classList.remove('pre');
+  resetImage(el.lbImg);
+  S.lightboxItem = null;
+  S.closing = false;
 }
 
 async function throwAway() {
@@ -710,11 +757,14 @@ async function throwAway() {
   try { await crumpleAndToss(el.lbImg); }
   catch (err) { console.warn(err); }
   removeItem(it);
-  await el.lightbox.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, easing: 'ease-out' }).finished.catch(() => {});
-  S.tossing = false;
+  const fade = el.lightbox.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 240, easing: 'ease-out', fill: 'forwards' });
+  await fade.finished.catch(() => {});
+  el.lightbox.hidden = true;
+  fade.cancel();
   el.lightbox.classList.remove('tossing');
-  closeLightbox();
   resetImage(el.lbImg);
+  S.lightboxItem = null;
+  S.tossing = false;
 }
 
 async function pngOf(job) {
@@ -778,10 +828,16 @@ export async function initBooth() {
   el.bgSwitch.addEventListener('click', () => { Sound.ensure(); setBg(!S.bg); });
   el.soundBtn.addEventListener('click', () => {
     Sound.enabled = !Sound.enabled;
-    el.soundBtn.textContent = Sound.enabled ? 'Sound on' : 'Sound off';
     el.soundBtn.setAttribute('aria-pressed', String(Sound.enabled));
+    el.soundBtn.title = Sound.enabled ? 'Sound on' : 'Sound off';
     if (!Sound.enabled) Sound.motor(false); else Sound.beep(880, 0.05, 0.05);
   });
+  el.themeBtn.addEventListener('click', () => setTheme(S.dark ? 'light' : 'dark', true));
+  setTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light', false);
+
+  const flap = createFlap(document.getElementById('flaps'), 6);
+  Counter.on((v, meta) => flap.set(v, { roll: !!meta.initial }));
+  Counter.start();
   el.lbClose.addEventListener('click', closeLightbox);
   el.lightbox.addEventListener('click', (e) => { if (e.target === el.lightbox) closeLightbox(); });
   el.lbDelete.addEventListener('click', () => { Sound.ensure(); throwAway(); });
@@ -789,7 +845,7 @@ export async function initBooth() {
     const it = S.lightboxItem; if (!it) return;
     el.lbNote.textContent = 'Preparing PNG…';
     const png = await pngOf(it.job);
-    const r = await saveBlob(png, `receipt-booth-${pad(it.job.n, 4)}.png`);
+    const r = await saveBlob(png, `reshito-shot-${pad(it.job.n, 4)}.png`);
     el.lbNote.textContent = { saved: 'Saved.', cancelled: 'Not saved.', busy: 'One moment — try again.', unavailable: 'Saving is not available in this view.' }[r] || '';
     if (r === 'saved') {
       el.lbNote.append(' Like it? ');

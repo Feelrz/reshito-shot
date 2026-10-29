@@ -3,9 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <title>Receipt Booth</title>
-  <meta name="description" content="A thermal receipt printer photobooth. Strike a pose, get printed on a random receipt.">
+  <title>Reshito Shot</title>
+  <meta name="description" content="Reshito Shot (レシート, receipt) is a thermal receipt printer photobooth. Strike a pose, get printed on a random receipt.">
+  <meta property="og:title" content="Reshito Shot">
+  <meta property="og:description" content="A thermal receipt printer photobooth. Strike a pose, get printed on a random receipt, tear it off.">
+  <meta property="og:type" content="website">
   <meta name="theme-color" content="#e8e7e3">
+  <script>
+    // theme before first paint: saved choice, else the system setting
+    (function () { var t; try { t = localStorage.getItem('rb-theme'); } catch (e) {}
+      if (t !== 'dark' && t !== 'light') t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = t; })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -17,14 +26,23 @@
   <div id="board" class="board" aria-label="Printed receipts"></div>
 
   <header class="hud hud-top">
-    <div class="brand"><i class="brand-mark"></i>Receipt Booth</div>
+    <div class="brand"><i class="brand-mark"></i>Reshito Shot</div>
     <div class="hud-right">
       <a class="kofi" id="kofi" href="https://ko-fi.com/notavision" target="_blank" rel="noopener" aria-label="Support me on Ko-fi">
         <img src="https://storage.ko-fi.com/cdn/cup-border.png" alt="" width="20" height="13">
         <span class="kofi-long">Support on Ko-fi</span><span class="kofi-short">Ko-fi</span>
       </a>
-      <button id="soundBtn" class="hud-btn" type="button" aria-pressed="true">Sound on</button>
-      <span id="count" class="hud-count"><b>00</b><span class="cnt-word"> printed</span></span>
+      <div class="toggles" id="toggles">
+        <button id="soundBtn" class="icon-btn" type="button" aria-pressed="true" aria-label="Sound" title="Sound">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.6L12.5 5.5v13l-4.9-4H4z" fill="currentColor"/><g class="i-on" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M15.6 9.2a4 4 0 0 1 0 5.6"/><path d="M18.1 6.8a7.4 7.4 0 0 1 0 10.4"/></g><g class="i-off" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M15.5 9.5l5 5M20.5 9.5l-5 5"/></g></svg>
+        </button>
+        <button id="themeBtn" class="icon-btn" type="button" aria-pressed="false" aria-label="Dark mode" title="Dark mode">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 4.5a7.5 7.5 0 0 1 0 15z" fill="currentColor"/></svg>
+        </button>
+      </div>
+      <div class="counter" id="counterBox" title="Prints so far, by everyone">
+        <span id="flaps"></span><span class="counter-label">prints</span>
+      </div>
     </div>
   </header>
   <a class="kofi-tip" id="kofiTip" href="https://ko-fi.com/notavision" target="_blank" rel="noopener" hidden>Enjoying it? Help me get a new PC <span aria-hidden="true">→</span></a>
@@ -85,6 +103,7 @@
 
   <footer class="hud hud-bottom">
     <span id="hint" class="hint">Space to print · F focus/full · B background</span>
+    <a class="credit" id="credit" href="https://www.instagram.com/not.a.vision/" target="_blank" rel="noopener">made by NAV <span aria-hidden="true">↗</span></a>
     <div class="hud-bottom-right">
       <button id="camBtn" class="hud-btn" type="button" hidden>Use camera</button>
       <label class="hud-btn">Upload photo<input type="file" accept="image/*" id="fileInput2" hidden></label>

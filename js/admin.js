@@ -40,7 +40,7 @@ function build() {
   root = $('admin');
   root.innerHTML = `
   <header class="ad-top">
-    <div class="ad-brand"><i class="brand-mark"></i>Receipt Booth <span>/</span> Admin</div>
+    <div class="ad-brand"><i class="brand-mark"></i>Reshito Shot <span>/</span> Admin</div>
     <div class="ad-stats" id="adStats"></div>
     <div class="ad-top-btns">
       <button class="pill" id="adLock" type="button" title="Sign out of the admin on this device">Lock</button>
@@ -510,7 +510,7 @@ async function publish() {
     const remote = await GH.fetchRemoteManifest(cfg);
     const { manifest, removedFiles } = mergeManifest(remote, p);
     const files = p.locals.map((r) => ({ path: r.file, blob: r.blob }));
-    const msg = `Receipt Booth: ${p.locals.length ? `+${p.locals.length} receipt${p.locals.length === 1 ? '' : 's'}` : ''}${p.locals.length && p.ovs.length ? ', ' : ''}${p.ovs.length ? `${p.ovs.length} edit${p.ovs.length === 1 ? '' : 's'}` : ''}`;
+    const msg = `Reshito Shot: ${p.locals.length ? `+${p.locals.length} receipt${p.locals.length === 1 ? '' : 's'}` : ''}${p.locals.length && p.ovs.length ? ', ' : ''}${p.ovs.length ? `${p.ovs.length} edit${p.ovs.length === 1 ? '' : 's'}` : ''}`;
     await GH.commit(cfg, { files, deletes: removedFiles, manifest, message: msg }, (t) => toast(t, true));
     for (const r of p.locals) await DB.put('receipts', { ...r, published: true });
     for (const o of p.ovs) await DB.put('overrides', { ...o, published: true });
@@ -531,7 +531,7 @@ async function exportZip() {
   const files = [{ name: 'receipts/manifest.json', data: JSON.stringify(manifest, null, 1) + '\n' }];
   for (const r of p.locals) files.push({ name: 'receipts/' + r.file, data: r.blob });
   const howto = [
-    'Receipt Booth — receipt update',
+    'Reshito Shot — receipt update',
     '',
     '1. Copy the "receipts" folder from this zip into your site folder and let it replace manifest.json.',
     '2. Upload / commit the changed files to your host.',
@@ -539,7 +539,7 @@ async function exportZip() {
   ].join('\n');
   files.push({ name: 'HOW-TO-UPDATE.txt', data: howto });
   const zip = await makeZip(files);
-  const r = await saveBlob(zip, `receipt-booth-update-${new Date().toISOString().slice(0, 10)}.zip`);
+  const r = await saveBlob(zip, `reshito-shot-update-${new Date().toISOString().slice(0, 10)}.zip`);
   toast(r === 'saved' ? `ZIP ready: ${p.locals.length} new image${p.locals.length === 1 ? '' : 's'} + manifest.` : 'Download not available in this view.');
 }
 

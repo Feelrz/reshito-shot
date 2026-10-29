@@ -14,7 +14,7 @@ function buildLock() {
   lockEl.hidden = true;
   lockEl.innerHTML = `
     <form class="lock-card" id="lockForm" autocomplete="off">
-      <div class="ad-brand"><i class="brand-mark"></i>Receipt Booth <span>/</span> Admin</div>
+      <div class="ad-brand"><i class="brand-mark"></i>Reshito Shot <span>/</span> Admin</div>
       <h2>Admin is locked</h2>
       <p class="lock-sub" id="lockSub"></p>
       <div class="lock-repo" id="lockRepo" hidden>

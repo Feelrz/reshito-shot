@@ -1,4 +1,6 @@
-# Receipt Booth
+# Reshito Shot
+
+*Reshito* (レシート) = struk dalam bahasa Jepang. Made by [NAV](https://www.instagram.com/not.a.vision/).
 
 Photobooth berbentuk printer struk thermal. Foto dicetak (dithering ala thermal) **menimpa struk acak**, lalu kertasnya disobek dari mesin dengan ujung bergerigi.
 
@@ -13,11 +15,21 @@ Photobooth berbentuk printer struk thermal. Foto dicetak (dithering ala thermal)
 - **275 struk** bawaan (v3 + JP). Setiap struk punya *zona foto* otomatis: di area daftar item, di antara header toko dan barcode.
 - **Board**: struk yang disobek ditempel di meja, tidak pernah menutupi live preview. Tap untuk **Save PNG**.
 - **Admin panel** untuk menambah struk sendiri (lihat di bawah).
+- **Made by NAV** di tengah bawah (di HP di bawah tombol) → Instagram @not.a.vision.
 - Keyboard: `Space` = print / sobek, `F` = FOCUS/FULL, `B` = background on/off (di FOCUS), `Shift+A` = admin (hanya di device yang sudah login admin).
 
 ## Ko-fi
 Tombol **Support on Ko-fi** ada di kanan atas (di HP tulisannya *Ko-fi*), memakai logo cup resmi dari server Ko-fi. Setelah print pertama muncul ajakan kecil sekali per sesi, dan setelah orang menyimpan PNG ada link Ko-fi di bawah tombol Save.
 Ganti link: ubah `https://ko-fi.com/notavision` di `index.html` (ada 2: `#kofi` dan `#kofiTip`).
+
+## Flap display: jumlah print global (real-time)
+Angka split-flap di kanan atas menghitung **semua print dari semua pengunjung** dan update langsung.
+- Default pakai **Abacus** (gratis, tanpa daftar, update real-time via stream). Pengaturannya di `js/config.js` → `COUNTER`.
+- **Upstash**: token Upstash tidak boleh ditaruh di situs statis (bisa dipakai orang untuk menghapus database). Pakai proxy kecil `counter-worker/worker.js` di Cloudflare Workers (gratis), lalu set `COUNTER = { provider: 'upstash-proxy', url: 'https://<worker>.workers.dev' }`. Langkahnya ada di komentar file worker. Untuk Upstash paket berbayar bisa juga langsung pakai token ACL yang dibatasi ke `INCR`/`GET` (`provider: 'upstash'`).
+- Kalau layanan counter tidak bisa dihubungi, flap tetap jalan dan menghitung print lokal.
+
+## Dark mode
+Tombol ◐ di kanan atas (di HP ada di bawah, sebelah tombol suara). Default mengikuti setting sistem, dan pilihan terakhir diingat. Di dark mode, preview kamera diberi alas kertas supaya tetap terlihat seperti hasil print.
 
 ## Jalankan lokal
 Kamera hanya jalan di HTTPS atau `localhost`.

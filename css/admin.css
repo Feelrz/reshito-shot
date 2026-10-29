@@ -1,4 +1,8 @@
 /* Admin panel — same quiet language as the booth */
+.admin, .admin-lock {
+  --ink: #161514; --on-ink: #f4f3ef; --mute: #75736d; --hair: #b9b7b0; --hover: rgba(0,0,0,.05);
+  color-scheme: light;
+}
 .admin {
   position: fixed; inset: 0; z-index: 90;
   background: #efeeea; color: var(--ink);
