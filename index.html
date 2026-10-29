@@ -68,7 +68,7 @@
         <label class="vf-link">or upload a photo<input type="file" accept="image/*" id="fileInput" hidden></label>
         <p class="vf-note" id="vfNote"></p>
       </div>
-      <div class="vf-meta"><span id="vfMeta">NO SIGNAL</span><span class="vf-res" id="vfRes"></span></div>
+      <div class="vf-meta"><span id="vfMeta">NO SIGNAL</span></div>
     </div>
 
     <!-- paper comes out of the slot inside this clipped area -->
@@ -114,10 +114,21 @@
     <span id="hint" class="hint">Space to print · F focus/full · B background</span>
     <a class="credit" id="credit" href="https://www.instagram.com/not.a.vision/" target="_blank" rel="noopener">made by NAV <span aria-hidden="true">↗</span></a>
     <div class="hud-bottom-right">
+      <button id="trayBtn" class="hud-btn tray-btn" type="button" hidden aria-controls="tray">Receipts <span class="tray-count" id="trayCount">0</span></button>
       <button id="camBtn" class="hud-btn" type="button" hidden>Use camera</button>
       <label class="hud-btn">Upload photo<input type="file" accept="image/*" id="fileInput2" hidden></label>
     </div>
   </footer>
+
+  <!-- phones / small screens: printed receipts live in their own tab instead of around the camera -->
+  <section class="tray" id="tray" hidden aria-label="Printed receipts">
+    <header class="tray-head">
+      <h2 class="tray-title">Receipts <span id="trayTitleCount">0</span></h2>
+      <button class="pill" id="trayClose" type="button">Close</button>
+    </header>
+    <p class="tray-note">Tap a receipt to save it or throw it away</p>
+    <div class="tray-scroll"><div class="tray-grid" id="trayGrid"></div></div>
+  </section>
 
   <div class="lightbox" id="lightbox" hidden>
     <div class="lb-inner">

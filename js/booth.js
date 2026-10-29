@@ -15,7 +15,8 @@ const MAX_BOARD = 18;
 const el = {
   stage: $('stage'), board: $('board'), track: $('track'), printer: $('printer'),
   viewfinder: $('viewfinder'), preview: $('preview'), countdown: $('countdown'),
-  vfEmpty: $('vfEmpty'), vfNote: $('vfNote'), vfMeta: $('vfMeta'), vfRes: $('vfRes'), startBtn: $('startBtn'),
+  vfEmpty: $('vfEmpty'), vfNote: $('vfNote'), vfMeta: $('vfMeta'), startBtn: $('startBtn'),
+  tray: $('tray'), trayGrid: $('trayGrid'), trayBtn: $('trayBtn'), trayCount: $('trayCount'), trayTitleCount: $('trayTitleCount'), trayClose: $('trayClose'),
   file1: $('fileInput'), file2: $('fileInput2'), lcd1: $('lcd1'), lcd2: $('lcd2'), led: $('led'),
   printBtn: $('printBtn'), modeSwitch: $('modeSwitch'), bgSwitch: $('bgSwitch'), bgRow: $('bgRow'), bgState: $('bgState'), soundBtn: $('soundBtn'), count: $('count'), themeBtn: $('themeBtn'), toggles: $('toggles'), counterBox: $('counterBox'),
   hint: $('hint'), flash: $('flash'), video: $('video'), camBtn: $('camBtn'),
@@ -33,6 +34,7 @@ export const S = {
   L: null,
   refs: { w: 900, h: 1500 },
   lightboxItem: null,
+  trayOpen: false,
   paused: false,
   tearNow: null,
 };
@@ -91,7 +93,6 @@ function layout() {
   el.viewfinder.style.setProperty('--vf-gap', snap(12) + 'px');
   el.viewfinder.style.setProperty('--vf-arm', snap(18) + 'px');
   el.viewfinder.style.setProperty('--vf-line', Math.max(1, Math.round(dpr)) / dpr + 'px');
-  if (el.vfRes) el.vfRes.textContent = `${dotsW} × ${dotsH} dots`;
   el.track.style.height = slotY + 'px';
   if (el.preview.width !== dotsW || el.preview.height !== dotsH) {
     el.preview.width = dotsW; el.preview.height = dotsH;
@@ -104,12 +105,14 @@ function layout() {
   document.body.classList.toggle('narrow', narrow);
 
   for (const it of S.items) {
-    if (changed) { const sp = pickSpot(it.rec, it.w, it.h); it.x = sp.x; it.y = sp.y; }
+    if (changed) mountItem(it, true);
+    if (narrow) continue;                      // phones: receipts are in the Receipts tab
     it.x = clamp(it.x, it.w * 0.2, vw - it.w * 0.2);
     it.y = clamp(it.y, 50, vh - 50);
     keepClear(it, false);
     placeItem(it);
   }
+  if (changed) { if (!narrow) closeTray(); updateTray(); }
 }
 
 /* =========================================================================
@@ -149,7 +152,7 @@ const Live = {
     requestAnimationFrame((t) => Live.tick(t));
     if (S.paused || !S.source || (S.state !== 'live' && S.state !== 'countdown')) return;
     if (S.state === 'live') camWatch();
-    if (!el.lightbox.hidden) return;                 // preview is covered: save CPU (and keep animations smooth)
+    if (!el.lightbox.hidden || S.trayOpen) return;   // preview is covered: save CPU (and keep animations smooth)
     if (now - this.last < 30) return;
     this.last = now;
     if (S.source.type === 'camera' && el.video.readyState < 2) return;
@@ -667,6 +670,7 @@ async function tearOff(node, job, s, wCss, hCss) {
   document.body.appendChild(node);
 
   const rot = rnd(-8, 8) || 2;
+  if (S.L.narrow) { await flyToTray(node, job, x0, y0, wCss, hCss, rot); return; }
   const bscale = boardScale(job.rec, s);
   const bw = job.rec.w * job.rec.scale * bscale, bh = job.rec.h * job.rec.scale * bscale;
   const spot = pickSpot(job.rec, bw, bh, rot);
@@ -687,6 +691,29 @@ async function tearOff(node, job, s, wCss, hCss) {
   if (S.printed === 1) { el.hint.textContent = 'Tap a receipt to save it · drag to move'; setTimeout(showKofiTip, 900); }
 }
 
+// phones: the torn receipt shrinks into the Receipts button instead of landing next to the camera
+async function flyToTray(node, job, x0, y0, wCss, hCss, rot) {
+  const first = el.trayBtn.hidden;
+  if (first) { el.trayCount.textContent = String(S.items.length + 1); el.trayBtn.hidden = false; layout(); }
+  const b = el.trayBtn.getBoundingClientRect();
+  const kEnd = Math.min(0.18, 44 / wCss);
+  const tx = b.left + b.width / 2 - wCss / 2, ty = b.top + b.height / 2 - hCss / 2;
+  setTimeout(() => { if (S.state === 'tear') setState('live'); }, 420);
+  const anim = node.animate([
+    { transform: `translate(${x0}px, ${y0}px) rotate(0deg) scale(1)`, opacity: 1 },
+    { transform: `translate(${x0 + rnd(-6, 6)}px, ${y0 - 34}px) rotate(${rot * 0.25}deg) scale(1.01)`, opacity: 1, offset: 0.22, easing: 'cubic-bezier(.3,.7,.4,1)' },
+    { transform: `translate(${tx}px, ${ty}px) rotate(${rot}deg) scale(${kEnd})`, opacity: 0.15 },
+  ], { duration: 900, easing: 'cubic-bezier(.5,0,.3,1)', fill: 'forwards' });
+  try { await anim.finished; } catch {}
+  await job.ready;
+  node.remove();
+  job.canvas = null;
+  const bscale = boardScale(job.rec, receiptScale(job.rec));
+  addItem(job, { x: 0, y: 0 }, job.rec.w * job.rec.scale * bscale, job.rec.h * job.rec.scale * bscale, rot);
+  el.trayBtn.classList.remove('bump'); void el.trayBtn.offsetWidth; el.trayBtn.classList.add('bump');
+  if (S.printed === 1) setTimeout(showKofiTip, 900);
+}
+
 /* =========================================================================
    Board (torn receipts) — never under the live preview
    ========================================================================= */
@@ -700,12 +727,6 @@ function boardScale(rec, s) {
 function halfWidth(w, h, rotDeg) {
   const r = (Math.abs(rotDeg) * Math.PI) / 180;
   return (w * Math.cos(r) + h * Math.sin(r)) / 2;
-}
-
-// phones: a receipt sits at the screen edge with its inner side tucked a little under the preview
-function narrowX(left, bw) {
-  const { pLeft, pW } = S.L;
-  return left ? pLeft + rnd(8, 18) - bw / 2 : pLeft + pW - rnd(8, 18) + bw / 2;
 }
 
 function pickSpot(rec, bw, bh, rot = 0) {
@@ -722,11 +743,8 @@ function pickSpot(rec, bw, bh, rot = 0) {
       x = rnd(Math.min(lo, hi), Math.max(lo, hi));
       y = rnd(Math.min(64 + bh * 0.5, vh / 2), Math.max(vh / 2, vh - 64 - bh * 0.55));
     } else {
-      x = narrowX(left, bw);
-      // fully beside the picture: nothing pokes out above it or under the caption
-      const { pTop, pH } = S.L;
-      const lo = pTop + bh / 2 + 8, hi = pTop + pH - bh / 2 - 8;
-      y = lo <= hi ? rnd(lo, hi) : pTop + pH / 2;
+      x = left ? bw * 0.3 : vw - bw * 0.3;      // not used on the board: phones keep receipts in the tab
+      y = vh / 2;
     }
     let score = Math.random() * 400;
     for (const it of S.items) {
@@ -741,19 +759,9 @@ function pickSpot(rec, bw, bh, rot = 0) {
 
 // push an item out of the centre column (live preview + printer) if it wandered in
 function keepClear(it, animate) {
-  if (!S.L) return false;
+  if (!S.L || S.L.narrow || !it.node.classList.contains('item')) return false;
   const { vw, centerW } = S.L;
   const hw = halfWidth(it.w, it.h, it.rot);
-  if (S.L.narrow) {
-    // phones: receipts tuck under the preview; one that is completely hidden goes back to the screen edge
-    const { pLeft, pTop, pW, pH } = S.L, m = 12;
-    const hh = Math.max(it.h, it.w) / 2;
-    const hidden = it.x - hw >= pLeft - m && it.x + hw <= pLeft + pW + m && it.y - hh >= pTop - m && it.y + hh <= pTop + pH + m;
-    if (!hidden) return false;
-    it.x = narrowX(it.x < vw / 2, it.w);
-    placeItem(it, animate);
-    return true;
-  }
   const cL = vw / 2 - centerW / 2, cR = vw / 2 + centerW / 2;
   if (it.x + hw <= cL || it.x - hw >= cR) return false;
   it.x = it.x < vw / 2 ? cL - hw - 10 : cR + hw + 10;
@@ -770,10 +778,6 @@ function placeItem(it, animate = false) {
 
 function addItem(job, spot, w, h, rot) {
   const node = document.createElement('div');
-  node.className = 'item';
-  node.style.width = w + 'px'; node.style.height = h + 'px';
-  node.style.setProperty('--r', rot + 'deg');
-  node.style.zIndex = ++S.z;
   const img = new Image(); img.src = job.url; img.alt = `Receipt print №${job.n}`; img.draggable = false;
   const tape = document.createElement('span');
   tape.className = 'tape';
@@ -781,19 +785,73 @@ function addItem(job, spot, w, h, rot) {
   tape.style.setProperty('--tr', rnd(-7, 7) + 'deg');
   tape.style.marginLeft = rnd(-w * 0.12, w * 0.12) + 'px';
   node.append(img, tape);
-  el.board.appendChild(node);
   const it = { node, x: spot.x, y: spot.y, w, h, rot, job, rec: job.rec };
   S.items.push(it);
-  placeItem(it);
-  keepClear(it, false);
+  mountItem(it, false);
   bindDrag(it);
   while (S.items.length > MAX_BOARD) removeItem(S.items[0]);
+  updateTray();
+}
+
+// a receipt lives either on the board (taped next to the camera) or, on phones, in the Receipts tab
+function mountItem(it, relayout) {
+  const n = it.node;
+  n.removeAttribute('style');
+  if (S.L.narrow) {
+    n.className = 'tray-card';
+    el.trayGrid.prepend(n);                                   // newest first
+    return;
+  }
+  n.className = 'item';
+  if (relayout) {
+    const bscale = boardScale(it.rec, S.L.s);
+    it.w = it.rec.w * it.rec.scale * bscale; it.h = it.rec.h * it.rec.scale * bscale;
+    it.rot = rnd(-8, 8) || 2;
+    const sp = pickSpot(it.rec, it.w, it.h, it.rot); it.x = sp.x; it.y = sp.y;
+  }
+  n.style.width = it.w + 'px'; n.style.height = it.h + 'px';
+  n.style.setProperty('--r', it.rot + 'deg');
+  n.style.zIndex = ++S.z;
+  el.board.appendChild(n);
+  placeItem(it);
+  keepClear(it, false);
 }
 
 function removeItem(it) {
   it.node.remove();
   URL.revokeObjectURL(it.job.url);
   S.items = S.items.filter((x) => x !== it);
+  updateTray();
+}
+
+/* ---------- Receipts tab ---------- */
+function updateTray() {
+  const n = S.items.length;
+  el.trayCount.textContent = String(n);
+  el.trayTitleCount.textContent = String(n);
+  const show = !!(S.L && S.L.narrow && n > 0);
+  if (el.trayBtn.hidden === show) { el.trayBtn.hidden = !show; requestAnimationFrame(layout); }
+  if (!n && S.trayOpen) closeTray();
+}
+function openTray() {
+  if (S.trayOpen || !S.items.length) return;
+  S.trayOpen = true;
+  el.tray.hidden = false;
+  void el.tray.offsetWidth;
+  el.tray.classList.add('open');
+  el.trayBtn.setAttribute('aria-expanded', 'true');
+}
+function closeTray() {
+  if (!S.trayOpen) return;
+  S.trayOpen = false;
+  el.tray.classList.remove('open');
+  el.trayBtn.setAttribute('aria-expanded', 'false');
+  setTimeout(() => { if (!S.trayOpen) el.tray.hidden = true; }, 400);
+}
+function openFromTray(it) {
+  const r = it.node.getBoundingClientRect();
+  it.x = r.left + r.width / 2; it.y = r.top + r.height / 2; it.w = r.width; it.h = r.height; it.rot = 0;
+  openLightbox(it);
 }
 
 let dragLayer = null;
@@ -810,7 +868,9 @@ function bindDrag(it) {
     clearTimeout(backT);
     backT = setTimeout(() => { if (n.isConnected && n.parentElement === dragLayer && !active) el.board.appendChild(n); }, 440);
   };
+  n.addEventListener('click', () => { if (n.classList.contains('tray-card')) openFromTray(it); });
   n.addEventListener('pointerdown', (e) => {
+    if (!n.classList.contains('item')) return;
     active = true; moved = false; sx = e.clientX; sy = e.clientY; ox = it.x; oy = it.y; pid = e.pointerId;
     n.style.zIndex = ++S.z;
     try { n.setPointerCapture(e.pointerId); } catch {}
@@ -966,6 +1026,8 @@ export async function initBooth() {
   Counter.on((v, meta) => flap.set(v, { roll: !!meta.initial }));
   Counter.start();
   el.lbClose.addEventListener('click', closeLightbox);
+  el.trayBtn.addEventListener('click', () => { Sound.ensure(); openTray(); });
+  el.trayClose.addEventListener('click', closeTray);
   el.lightbox.addEventListener('click', (e) => { if (e.target === el.lightbox) closeLightbox(); });
   el.lbDelete.addEventListener('click', () => { Sound.ensure(); throwAway(); });
   el.lbSave.addEventListener('click', async () => {
@@ -1008,6 +1070,7 @@ export async function initBooth() {
     if (S.paused) return;
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (!el.lightbox.hidden) { if (e.key === 'Escape') closeLightbox(); return; }
+    if (S.trayOpen) { if (e.key === 'Escape') closeTray(); return; }
     if (e.code === 'Space' || e.key === 'Enter') {
       if (e.target.tagName === 'BUTTON' && e.key === 'Enter') return;
       e.preventDefault();

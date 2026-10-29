@@ -15,7 +15,7 @@ Photobooth berbentuk printer struk thermal. Foto dicetak (dithering ala thermal)
 - **325 struk** bawaan: 100 EN, 200 JP, 25 TH. Setiap struk punya *zona foto* otomatis: di bawah header toko (nama, alamat, tanggal tetap terbaca), di atas garis titik-titik paling bawah.
 - **Watermark**: di bawah garis titik-titik kecil paling bawah setiap struk tercetak `https://reshito-shot.vercel.app/`, ikut gaya cetak thermal (ikut pudar/bergaris seperti teks struk). Ganti atau matikan di `js/config.js` → `WATERMARK` (string kosong = tanpa watermark).
 - **Throw away**: struk diremas jadi bola kertas (lipatan + bayangan) lalu dilempar ke tong sampah kecil yang bergoyang sebagai satu kesatuan.
-- **Board**: struk yang disobek ditempel di meja, tidak pernah menutupi live preview. Tap untuk **Save PNG**.
+- **Board**: struk yang disobek ditempel di meja, tidak pernah menutupi live preview. Tap untuk **Save PNG**. Di HP (layar sempit) struk masuk ke tab **Receipts** (tombol di bawah) supaya layar kamera tetap bersih.
 - **Admin panel** untuk menambah struk sendiri (lihat di bawah).
 - **Made by NAV** di tengah bawah (di HP di bawah tombol) → Instagram @not.a.vision.
 - Kotak kecil di samping nama **berkedip seperti lampu REC** kamera.
