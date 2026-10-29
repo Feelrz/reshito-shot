@@ -4,6 +4,7 @@ import { Seg } from './seg.js';
 import { Sound } from './sound.js';
 import { thermal, composePrint, INK } from './print.js';
 import { Library } from './library.js';
+import { crumpleAndToss, resetImage } from './toss.js';
 
 // Printer geometry (unscaled px, must match booth.css)
 const PRINTER_W = 500, PRINTER_H = 196, SLOT_CY = 24, SLOT_W = PRINTER_W * 0.92;
@@ -21,7 +22,7 @@ const el = {
 
 export const S = {
   state: 'idle',            // idle | starting | nosource | live | countdown | capturing | printing | tear
-  mode: 'focus',            // focus (person cut-out) | full (whole photo, no detection)
+  mode: 'full',             // full (whole photo, no detection) — default | focus (person cut-out)
   bg: false,                // focus only: false = background removed, true = faded background
   source: null,             // { type: 'camera'|'image', el, mirror, key }
   printed: 0,
@@ -130,6 +131,7 @@ const Live = {
   tick(now) {
     requestAnimationFrame((t) => Live.tick(t));
     if (S.paused || !S.source || (S.state !== 'live' && S.state !== 'countdown')) return;
+    if (!el.lightbox.hidden) return;                 // preview is covered: save CPU (and keep animations smooth)
     if (now - this.last < 30) return;
     this.last = now;
     if (S.source.type === 'camera' && el.video.readyState < 2) return;
@@ -317,6 +319,7 @@ function showKofiTip() {
 async function startCamera() {
   if (S.state === 'starting') return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return noSource();
+  if (!el.vfEmpty.hidden) el.vfEmpty.classList.add('waking');
   setState('starting');
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -329,14 +332,30 @@ async function startCamera() {
     if (S.source && S.source.url) URL.revokeObjectURL(S.source.url);
     S.source = { type: 'camera', el: el.video, mirror: true, key: 'cam' };
     Live.liveMask = null;
-    el.vfEmpty.hidden = true;
+    hideEmpty();
     el.camBtn.hidden = true;
     setState('live');
+    revealPreview();
     Seg.init();
   } catch (err) {
     console.warn('[receipt-booth] camera:', err);
     noSource(err && err.name);
   }
+}
+
+let revealT = 0;
+function hideEmpty() {
+  const v = el.vfEmpty;
+  if (v.hidden) return;
+  v.classList.add('leaving');
+  setTimeout(() => { v.hidden = true; v.classList.remove('leaving', 'waking'); }, 420);
+}
+function revealPreview() {
+  const vf = el.viewfinder;
+  vf.classList.remove('reveal'); void vf.offsetWidth; vf.classList.add('reveal');
+  clearTimeout(revealT);
+  revealT = setTimeout(() => vf.classList.remove('reveal'), 1700);
+  Sound.beep(660, 0.05, 0.04); setTimeout(() => Sound.beep(990, 0.07, 0.04), 110);
 }
 
 function noSource(reason) {
@@ -348,6 +367,7 @@ function noSource(reason) {
   } else if (!navigator.mediaDevices) note = 'Camera needs HTTPS (or localhost). Upload a photo instead.';
   el.vfNote.textContent = note;
   el.startBtn.textContent = 'Try camera again';
+  el.vfEmpty.classList.remove('waking', 'leaving');
   if (!S.source) { el.vfEmpty.hidden = false; setState('nosource'); }
   else { el.vfEmpty.hidden = true; setState('live'); }
 }
@@ -360,10 +380,10 @@ function loadFile(file) {
     if (S.source && S.source.type === 'camera') stopCamera();
     if (S.source && S.source.url) URL.revokeObjectURL(S.source.url);
     S.source = { type: 'image', el: img, mirror: false, key: 'img' + Date.now(), url };
-    el.vfEmpty.hidden = true;
+    hideEmpty();
     el.camBtn.hidden = false;
     Seg.init();
-    if (S.state !== 'printing' && S.state !== 'tear' && S.state !== 'capturing') setState('live');
+    if (S.state !== 'printing' && S.state !== 'tear' && S.state !== 'capturing') { setState('live'); revealPreview(); }
     else refreshMeta();
   };
   img.src = url;
@@ -677,7 +697,25 @@ function openLightbox(it) {
   el.lbNote.textContent = `№${pad(it.job.n, 4)} · receipt ${it.job.rec.id} · ${it.job.W}×${it.job.H}px`;
   el.lightbox.hidden = false;
 }
-function closeLightbox() { el.lightbox.hidden = true; S.lightboxItem = null; }
+function closeLightbox() {
+  if (S.tossing) return;
+  el.lightbox.hidden = true; S.lightboxItem = null;
+}
+
+async function throwAway() {
+  const it = S.lightboxItem;
+  if (!it || S.tossing) return;
+  S.tossing = true;
+  el.lightbox.classList.add('tossing');
+  try { await crumpleAndToss(el.lbImg); }
+  catch (err) { console.warn(err); }
+  removeItem(it);
+  await el.lightbox.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, easing: 'ease-out' }).finished.catch(() => {});
+  S.tossing = false;
+  el.lightbox.classList.remove('tossing');
+  closeLightbox();
+  resetImage(el.lbImg);
+}
 
 async function pngOf(job) {
   if (job.blob.type === 'image/png') return job.blob;
@@ -746,7 +784,7 @@ export async function initBooth() {
   });
   el.lbClose.addEventListener('click', closeLightbox);
   el.lightbox.addEventListener('click', (e) => { if (e.target === el.lightbox) closeLightbox(); });
-  el.lbDelete.addEventListener('click', () => { const it = S.lightboxItem; closeLightbox(); if (it) removeItem(it); });
+  el.lbDelete.addEventListener('click', () => { Sound.ensure(); throwAway(); });
   el.lbSave.addEventListener('click', async () => {
     const it = S.lightboxItem; if (!it) return;
     el.lbNote.textContent = 'Preparing PNG…';

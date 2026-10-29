@@ -6,7 +6,7 @@ Photobooth berbentuk printer struk thermal. Foto dicetak (dithering ala thermal)
 - **Live preview thermal**: kamera langsung dirender jadi titik tinta.
 - **FOCUS / FULL** (switch di printer):
   - **FOCUS**: hanya orang yang dideteksi. Di bawahnya ada switch **BACKGROUND**: *OFF* = background hilang, *ON* = background tetap ada tapi dicetak samar supaya orangnya menonjol.
-  - **FULL**: foto utuh apa adanya, tanpa deteksi orang sama sekali.
+  - **FULL** (default): foto utuh apa adanya, tanpa deteksi orang sama sekali.
   - Pilihan terakhir diingat di browser. Jalan untuk kamera **dan** foto upload. Model cut-out (MediaPipe Selfie Segmentation) sudah ikut di folder `vendor/`, tidak butuh CDN, bisa offline.
 - **Print realistis**: dot gain tinta, garis elemen head mati yang menembus teks + foto, banding feed kertas, tinta tidak rata, grain kertas, lalu sedikit soft seperti hasil scan.
 - **Print → feed → tear**: kertas keluar dari slot. Tarik ke atas atau tap untuk menyobek; kalau didiamkan, sobek otomatis.

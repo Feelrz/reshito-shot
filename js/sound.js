@@ -79,4 +79,44 @@ export const Sound = {
     g.gain.setValueCurveAtTime(curve, t, dur);
     n.connect(bp).connect(g).connect(this.master); n.start(t); n.stop(t + dur + 0.02);
   },
+
+  // paper being crushed: a burst of tiny crackles
+  crumple(dur = 0.75) {
+    if (!this.ok()) return;
+    const c = this.ctx, t0 = c.currentTime;
+    const count = 26;
+    for (let i = 0; i < count; i++) {
+      const t = t0 + Math.pow(Math.random(), 0.8) * dur;
+      const n = this.noise(), bp = c.createBiquadFilter(), g = c.createGain();
+      bp.type = 'bandpass'; bp.frequency.value = 1400 + Math.random() * 3800; bp.Q.value = 0.7 + Math.random() * 1.5;
+      const len = 0.012 + Math.random() * 0.05, v = 0.06 + Math.random() * 0.22;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0008, t + len);
+      n.connect(bp).connect(g).connect(this.master);
+      const off = Math.random() * 1.2;
+      n.start(t, off); n.stop(t + len + 0.02);
+    }
+  },
+  // the ball flying through the air
+  whoosh(dur = 0.55) {
+    if (!this.ok()) return;
+    const c = this.ctx, t = c.currentTime;
+    const n = this.noise(), bp = c.createBiquadFilter(), g = c.createGain();
+    bp.type = 'bandpass'; bp.Q.value = 1.1;
+    bp.frequency.setValueAtTime(380, t); bp.frequency.exponentialRampToValueAtTime(1500, t + dur * 0.55); bp.frequency.exponentialRampToValueAtTime(600, t + dur);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + dur * 0.45); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    n.connect(bp).connect(g).connect(this.master); n.start(t); n.stop(t + dur + 0.05);
+  },
+  // landing in the bin
+  thunk() {
+    if (!this.ok()) return;
+    const c = this.ctx, t = c.currentTime;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(55, t + 0.16);
+    g.gain.setValueAtTime(0.35, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    o.connect(g).connect(this.master); o.start(t); o.stop(t + 0.22);
+    const n = this.noise(), lp = c.createBiquadFilter(), g2 = c.createGain();
+    lp.type = 'lowpass'; lp.frequency.value = 900;
+    g2.gain.setValueAtTime(0.25, t); g2.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    n.connect(lp).connect(g2).connect(this.master); n.start(t); n.stop(t + 0.1);
+  },
 };

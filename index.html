@@ -35,12 +35,13 @@
       <canvas id="preview" class="preview" width="200" height="250"></canvas>
       <i class="crop tl"></i><i class="crop tr"></i><i class="crop bl"></i><i class="crop br"></i>
       <div class="vf-count" id="countdown" aria-live="polite"></div>
+      <i class="vf-scan" aria-hidden="true"></i>
       <div class="vf-empty" id="vfEmpty">
         <button class="pill pill-dark" id="startBtn" type="button">Start camera</button>
         <label class="vf-link">or upload a photo<input type="file" accept="image/*" id="fileInput" hidden></label>
         <p class="vf-note" id="vfNote"></p>
       </div>
-      <div class="vf-meta" id="vfMeta">LIVE · FOCUS</div>
+      <div class="vf-meta" id="vfMeta">NO SIGNAL</div>
     </div>
 
     <!-- paper comes out of the slot inside this clipped area -->
@@ -61,12 +62,12 @@
         </div>
         <div class="panel-right">
           <div class="switch-wrap">
-            <div class="switch" id="modeSwitch" role="radiogroup" aria-label="Print mode">
-              <button type="button" role="radio" data-mode="focus" aria-checked="true">Focus</button>
-              <button type="button" role="radio" data-mode="full" aria-checked="false">Full</button>
+            <div class="switch" id="modeSwitch" role="radiogroup" aria-label="Print mode" data-mode="full">
+              <button type="button" role="radio" data-mode="focus" aria-checked="false">Focus</button>
+              <button type="button" role="radio" data-mode="full" aria-checked="true">Full</button>
               <i class="knob"></i>
             </div>
-            <div class="bg-row" id="bgRow">
+            <div class="bg-row disabled" id="bgRow">
               <span class="bg-label">BACKGROUND</span>
               <button type="button" class="mini-switch" id="bgSwitch" role="switch" aria-checked="false" aria-label="Background in focus mode"><i></i></button>
               <span class="bg-state" id="bgState">OFF</span>
