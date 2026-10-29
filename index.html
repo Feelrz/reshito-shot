@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>Receipt Booth</title>
+  <meta name="description" content="A thermal receipt printer photobooth. Strike a pose, get printed on a random receipt.">
+  <meta name="theme-color" content="#e8e7e3">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/booth.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+  <!-- torn receipts land here -->
+  <div id="board" class="board" aria-label="Printed receipts"></div>
+
+  <header class="hud hud-top">
+    <div class="brand"><i class="brand-mark"></i>Receipt Booth</div>
+    <div class="hud-right">
+      <a class="kofi" id="kofi" href="https://ko-fi.com/notavision" target="_blank" rel="noopener" aria-label="Support me on Ko-fi">
+        <img src="https://storage.ko-fi.com/cdn/cup-border.png" alt="" width="20" height="13">
+        <span class="kofi-long">Support on Ko-fi</span><span class="kofi-short">Ko-fi</span>
+      </a>
+      <button id="soundBtn" class="hud-btn" type="button" aria-pressed="true">Sound on</button>
+      <span id="count" class="hud-count"><b>00</b><span class="cnt-word"> printed</span></span>
+    </div>
+  </header>
+  <a class="kofi-tip" id="kofiTip" href="https://ko-fi.com/notavision" target="_blank" rel="noopener" hidden>Enjoying it? Help me get a new PC <span aria-hidden="true">→</span></a>
+
+  <main class="stage" id="stage">
+    <!-- live thermal preview -->
+    <div class="viewfinder" id="viewfinder">
+      <canvas id="preview" class="preview" width="200" height="250"></canvas>
+      <i class="crop tl"></i><i class="crop tr"></i><i class="crop bl"></i><i class="crop br"></i>
+      <div class="vf-count" id="countdown" aria-live="polite"></div>
+      <div class="vf-empty" id="vfEmpty">
+        <button class="pill pill-dark" id="startBtn" type="button">Start camera</button>
+        <label class="vf-link">or upload a photo<input type="file" accept="image/*" id="fileInput" hidden></label>
+        <p class="vf-note" id="vfNote"></p>
+      </div>
+      <div class="vf-meta" id="vfMeta">LIVE · FOCUS</div>
+    </div>
+
+    <!-- paper comes out of the slot inside this clipped area -->
+    <div class="track" id="track"></div>
+
+    <div class="printer" id="printer">
+      <div class="lid">
+        <div class="slot"><i class="slot-lip"></i></div>
+        <div class="cutter"></div>
+      </div>
+      <div class="face">
+        <div class="panel-left">
+          <div class="lcd">
+            <span class="lcd-1" id="lcd1">HELLO</span>
+            <span class="lcd-2" id="lcd2">PRESS PRINT TO WAKE</span>
+          </div>
+          <div class="model"><i class="led" id="led"></i>RB-01 &nbsp;THERMAL PHOTO PRINTER</div>
+        </div>
+        <div class="panel-right">
+          <div class="switch-wrap">
+            <div class="switch" id="modeSwitch" role="radiogroup" aria-label="Print mode">
+              <button type="button" role="radio" data-mode="focus" aria-checked="true">Focus</button>
+              <button type="button" role="radio" data-mode="full" aria-checked="false">Full</button>
+              <i class="knob"></i>
+            </div>
+            <div class="bg-row" id="bgRow">
+              <span class="bg-label">BACKGROUND</span>
+              <button type="button" class="mini-switch" id="bgSwitch" role="switch" aria-checked="false" aria-label="Background in focus mode"><i></i></button>
+              <span class="bg-state" id="bgState">OFF</span>
+            </div>
+          </div>
+          <div class="print-wrap">
+            <div class="bezel"><button class="print-btn" id="printBtn" type="button" aria-label="Print"></button></div>
+            <span class="print-label">PRINT</span>
+          </div>
+        </div>
+      </div>
+      <i class="foot l"></i><i class="foot r"></i>
+    </div>
+  </main>
+
+  <footer class="hud hud-bottom">
+    <span id="hint" class="hint">Space to print · F focus/full · B background</span>
+    <div class="hud-bottom-right">
+      <button id="camBtn" class="hud-btn" type="button" hidden>Use camera</button>
+      <label class="hud-btn">Upload photo<input type="file" accept="image/*" id="fileInput2" hidden></label>
+    </div>
+  </footer>
+
+  <div class="lightbox" id="lightbox" hidden>
+    <div class="lb-inner">
+      <img id="lbImg" alt="Printed receipt">
+      <div class="lb-actions">
+        <button id="lbSave" class="pill pill-dark" type="button">Save PNG</button>
+        <button id="lbDelete" class="pill" type="button">Throw away</button>
+        <button id="lbClose" class="pill" type="button">Close</button>
+      </div>
+      <p class="lb-note" id="lbNote"></p>
+    </div>
+  </div>
+
+  <div class="flash" id="flash"></div>
+  <video id="video" playsinline muted autoplay></video>
+  <div id="admin" class="admin" hidden></div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
