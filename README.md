@@ -5,7 +5,7 @@
 Photobooth berbentuk printer struk thermal. Foto dicetak (dithering ala thermal) **menimpa struk acak**, lalu kertasnya disobek dari mesin dengan ujung bergerigi.
 
 ## Fitur
-- **Live preview thermal**: kamera langsung dirender jadi titik tinta.
+- **Live preview thermal**: kamera langsung dirender jadi titik tinta. Kalau kamera berhenti (laptop sleep, pindah app/tab, kamera diambil app lain), booth otomatis menyambung ulang; kalau 3× gagal dalam 1 menit, muncul tombol *Try camera again*.
 - **FOCUS / FULL** (switch di printer):
   - **FOCUS**: hanya orang yang dideteksi. Di bawahnya ada switch **BACKGROUND**: *OFF* = background hilang, *ON* = background tetap ada tapi dicetak samar supaya orangnya menonjol.
   - **FULL** (default): foto utuh apa adanya, tanpa deteksi orang sama sekali.

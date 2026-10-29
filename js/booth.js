@@ -139,6 +139,7 @@ const Live = {
   tick(now) {
     requestAnimationFrame((t) => Live.tick(t));
     if (S.paused || !S.source || (S.state !== 'live' && S.state !== 'countdown')) return;
+    if (S.state === 'live') camWatch();
     if (!el.lightbox.hidden) return;                 // preview is covered: save CPU (and keep animations smooth)
     if (now - this.last < 30) return;
     this.last = now;
@@ -335,19 +336,101 @@ function showKofiTip() {
 /* =========================================================================
    Sources
    ========================================================================= */
+const camConstraints = (deviceId) => ({
+  video: deviceId
+    ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 960 } }
+    : { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 960 } },
+  audio: false,
+});
+
+/* Camera health: browsers can pause the hidden <video>, the OS can stop the camera (sleep, app switch,
+   another app taking it). The live loop calls camWatch(); it resumes playback, and reconnects when
+   frames stop coming. */
+const Cam = { stream: null, rvfc: false, lastFrameAt: 0, lastCT: -1, lastPlayTry: 0, mutedAt: 0, recovering: false, restarts: [] };
+
+function watchCamera(stream) {
+  Cam.stream = stream;
+  Cam.lastFrameAt = performance.now(); Cam.lastCT = -1; Cam.mutedAt = 0;
+  const track = stream.getVideoTracks()[0];
+  if (track) {
+    track.addEventListener('mute', () => { if (Cam.stream === stream) Cam.mutedAt = performance.now(); });
+    track.addEventListener('unmute', () => { if (Cam.stream === stream) { Cam.mutedAt = 0; Cam.lastFrameAt = performance.now(); el.video.play().catch(() => {}); } });
+  }
+  const v = el.video;
+  Cam.rvfc = typeof v.requestVideoFrameCallback === 'function';
+  if (Cam.rvfc) {
+    const onFrame = () => { if (Cam.stream !== stream) return; Cam.lastFrameAt = performance.now(); v.requestVideoFrameCallback(onFrame); };
+    v.requestVideoFrameCallback(onFrame);
+  }
+}
+
+function camWatch() {
+  if (!S.source || S.source.type !== 'camera' || !Cam.stream || Cam.recovering || document.hidden) return;
+  const now = performance.now(), v = el.video;
+  if (v.currentTime !== Cam.lastCT) { Cam.lastCT = v.currentTime; if (!Cam.rvfc) Cam.lastFrameAt = now; }
+  const track = Cam.stream.getVideoTracks()[0];
+  if (!track || track.readyState === 'ended') { recoverCamera('ended'); return; }
+  const idle = now - Cam.lastFrameAt;
+  if ((v.paused || idle > 1200) && now - Cam.lastPlayTry > 1000) { Cam.lastPlayTry = now; v.play().catch(() => {}); }
+  if (idle > 5000 || (Cam.mutedAt && now - Cam.mutedAt > 5000)) recoverCamera(Cam.mutedAt ? 'muted' : 'frozen');
+}
+
+async function recoverCamera(reason) {
+  if (Cam.recovering) return;
+  const now = performance.now();
+  Cam.restarts = Cam.restarts.filter((t) => now - t < 60000);
+  if (Cam.restarts.length >= 3) { camLost(); return; }
+  Cam.restarts.push(now);
+  Cam.recovering = true;
+  console.warn('[reshito-shot] camera', reason, '→ reconnecting');
+  const old = Cam.stream && Cam.stream.getVideoTracks()[0];
+  const deviceId = old && old.getSettings ? old.getSettings().deviceId : undefined;
+  if (S.state === 'live') lcd('RECONNECTING', 'CAMERA');
+  stopCamera();
+  try {
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia(camConstraints(deviceId)); }
+    catch { stream = await navigator.mediaDevices.getUserMedia(camConstraints()); }
+    if (!S.source || S.source.type !== 'camera') { stream.getTracks().forEach((t) => t.stop()); return; }   // switched to a photo meanwhile
+    el.video.srcObject = stream;
+    await el.video.play().catch(() => {});
+    watchCamera(stream);
+    if (S.state === 'live') lcd('READY', modeLabel());
+  } catch (err) {
+    console.warn('[reshito-shot] camera reconnect failed:', err);
+    camLost();
+  } finally {
+    Cam.recovering = false;
+  }
+}
+
+function camLost() {
+  stopCamera();
+  if (!S.source || S.source.type !== 'camera') return;
+  S.source = null;
+  Live.liveMask = null;
+  el.vfNote.textContent = 'The camera stopped (it may be in use by another app). Try again, or upload a photo.';
+  el.startBtn.textContent = 'Try camera again';
+  el.vfEmpty.classList.remove('waking', 'leaving');
+  el.vfEmpty.hidden = false;
+  el.camBtn.hidden = true;
+  setState('nosource');
+}
+
 async function startCamera() {
   if (S.state === 'starting') return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return noSource();
   if (!el.vfEmpty.hidden) el.vfEmpty.classList.add('waking');
   setState('starting');
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false,
-    });
+    stopCamera();
+    const stream = await navigator.mediaDevices.getUserMedia(camConstraints());
     el.video.srcObject = stream;
     await el.video.play().catch(() => {});
     for (let i = 0; i < 100 && !el.video.videoWidth; i++) await sleep(50);
     if (!el.video.videoWidth) throw new Error('no frames');
+    watchCamera(stream);
+    Cam.restarts = [];
     if (S.source && S.source.url) URL.revokeObjectURL(S.source.url);
     S.source = { type: 'camera', el: el.video, mirror: true, key: 'cam' };
     Live.liveMask = null;
@@ -357,7 +440,7 @@ async function startCamera() {
     revealPreview();
     Seg.init();
   } catch (err) {
-    console.warn('[receipt-booth] camera:', err);
+    console.warn('[reshito-shot] camera:', err);
     noSource(err && err.name);
   }
 }
@@ -412,6 +495,7 @@ function stopCamera() {
   const st = el.video.srcObject;
   if (st) st.getTracks().forEach((t) => t.stop());
   el.video.srcObject = null;
+  Cam.stream = null;
 }
 
 /* =========================================================================
@@ -855,12 +939,27 @@ export async function initBooth() {
     }
   });
 
+  // drop a photo from outside the page. Dragging the page's own images (e.g. the receipt in the
+  // lightbox) must never end up as the booth's photo: that used to swap the camera for a receipt.
+  let innerDrag = false;
+  document.addEventListener('dragstart', (e) => {
+    if (e.target && e.target.tagName === 'IMG') { e.preventDefault(); return; }
+    innerDrag = true;
+  });
+  document.addEventListener('dragend', () => { innerDrag = false; });
   window.addEventListener('dragover', (e) => e.preventDefault());
   window.addEventListener('drop', (e) => {
     e.preventDefault();
-    if (S.paused) return;
+    const inner = innerDrag; innerDrag = false;
+    if (S.paused || inner) return;
     const f = e.dataTransfer && e.dataTransfer.files[0];
-    if (f) loadFile(f);
+    if (f && f.type.startsWith('image/')) loadFile(f);
+  });
+  // coming back to the tab/app: make sure the camera is still playing
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !S.source || S.source.type !== 'camera') return;
+    Cam.lastFrameAt = performance.now(); Cam.lastCT = -1;
+    el.video.play().catch(() => {});
   });
   window.addEventListener('keydown', (e) => {
     if (S.paused) return;
@@ -879,6 +978,7 @@ export async function initBooth() {
   let raf = 0;
   window.addEventListener('resize', () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(layout); });
 
+  el.lbImg.draggable = false;
   Live.resize(el.preview.width, el.preview.height);
   layout();
   setState('idle');

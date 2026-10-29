@@ -31,7 +31,7 @@ export const Seg = {
         this.ss = ss;
         const [warm, wctx] = makeCanvas(64, 80);
         wctx.fillStyle = '#888'; wctx.fillRect(0, 0, 64, 80);
-        await this.send(warm, 16, 20);         // compiles shaders up-front
+        await this.send(warm, 16, 20, 20000);  // compiles shaders up-front
         this.status = 'ready';
       } catch (err) {
         console.warn('[receipt-booth] cut-out model unavailable:', err);
@@ -63,21 +63,30 @@ export const Seg = {
     job.out = out;
   },
 
-  async send(source, w, h) {
-    this.job = { w, h, out: null };
-    await this.ss.send({ image: source });
-    const out = this.job.out;
-    this.job = null;
-    return out;
+  async send(source, w, h, limit = 0) {
+    const job = { w, h, out: null };
+    this.job = job;
+    const done = this.ss.send({ image: source });
+    if (limit) {
+      // a lost GPU context can leave MediaPipe hanging forever: never let that freeze the booth
+      let timer;
+      const timeout = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('cut-out timed out')), limit); });
+      try { await Promise.race([done, timeout]); } finally { clearTimeout(timer); }
+    } else await done;
+    if (this.job === job) this.job = null;
+    return job.out;
   },
 
   // Returns Float32Array(w*h) with 1 = person, or null. Calls are serialised.
   segment(source, w, h) {
     if (this.status !== 'ready') return Promise.resolve(null);
     const run = this.chain.then(async () => {
-      try { return await this.send(source, w, h); }
+      if (this.status !== 'ready') return null;
+      try { return await this.send(source, w, h, 4000); }
       catch (err) {
-        if (++this.errors > 6) { this.status = 'failed'; this.onChange(); }
+        const hung = /timed out/.test(err && err.message);
+        if (hung) this.hangs = (this.hangs || 0) + 1;
+        if (++this.errors > 6 || this.hangs >= 2) { this.status = 'failed'; this.onChange(); }   // FOCUS falls back to FULL
         console.warn(err);
         return null;
       }
