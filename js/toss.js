@@ -87,15 +87,13 @@ function makeBall(srcImg, S) {
 }
 
 /* ---------- wastebasket ---------- */
+// One element: inside, back rim, a slot for the ball, the frosted body and the front rim all move together.
 function makeBin() {
-  const back = document.createElement('div');
-  back.className = 'bin bin-back';
-  back.innerHTML = '<i class="bin-hole"></i><i class="bin-rim-back"></i>';
-  const front = document.createElement('div');
-  front.className = 'bin bin-front';
-  front.innerHTML = '<i class="bin-rim"></i><i class="bin-body"></i>';
-  document.body.append(back, front);
-  return { back, front, w: 112, h: 128 };
+  const el = document.createElement('div');
+  el.className = 'bin';
+  el.innerHTML = '<i class="bin-hole"></i><i class="bin-rim-back"></i><div class="bin-slot"></div><i class="bin-shell"><i class="bin-body"></i></i><i class="bin-rim"></i>';
+  document.body.appendChild(el);
+  return { el, slot: el.querySelector('.bin-slot'), w: 124, h: 140, mouth: 14 };
 }
 
 const tf = (x, y, rot = 0, s = 1) => `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${rot.toFixed(1)}deg) scale(${s.toFixed(3)})`;
@@ -120,10 +118,8 @@ export async function crumpleAndToss(img) {
   const narrow = vw < 760;
   const bx = narrow ? vw / 2 - bin.w / 2 : clamp(r.right + Math.min(220, (vw - r.right) * 0.5) - bin.w / 2, r.right + 30, vw - bin.w - 24);
   const by = vh - bin.h - (narrow ? 26 : 44);
-  for (const part of [bin.back, bin.front]) {
-    part.style.left = bx + 'px'; part.style.top = by + 'px';
-    part.animate([{ transform: 'translateY(170px)', opacity: 0 }, { transform: 'translateY(0)', opacity: 1 }], { duration: 520, easing: 'cubic-bezier(.2,.9,.3,1.15)', fill: 'forwards' });
-  }
+  bin.el.style.left = bx + 'px'; bin.el.style.top = by + 'px';
+  const binIn = bin.el.animate([{ transform: 'translateY(180px)', opacity: 0 }, { transform: 'translateY(0)', opacity: 1 }], { duration: 520, easing: 'cubic-bezier(.2,.9,.3,1.15)', fill: 'forwards' });
   // 1) crumple the flat receipt (starts right away; the ball is built while it runs)
   Sound.crumple();
   const kx = S / r.width, ky = S / r.height;
@@ -158,7 +154,7 @@ export async function crumpleAndToss(img) {
   ], { duration: 340, easing: 'ease-in-out', fill: 'forwards' }).finished.catch(() => {});
   // 3) toss in an arc into the bin
   const end = 64 / S;                                   // ball size when it reaches the opening
-  const ex = bx + bin.w / 2 - S / 2, ey = by + 9 - S / 2;
+  const ex = bx + bin.w / 2 - S / 2, ey = by + bin.mouth - 4 - S / 2;
   const arc = 150 + Math.abs(ex - sx0) * 0.18;
   const spin = (ex > sx0 ? 1 : -1) * rnd(420, 620);
   const frames = [];
@@ -171,24 +167,26 @@ export async function crumpleAndToss(img) {
   }
   Sound.whoosh();
   await ball.animate(frames, { duration: 720, easing: 'cubic-bezier(.3,.05,.6,1)', fill: 'forwards' }).finished.catch(() => {});
-  // 4) drop in behind the front of the bin
+  // 4) the ball moves into the bin itself (between the back rim and the frosted body) and drops in
+  await binIn.finished.catch(() => {});
+  for (const a of ball.getAnimations()) a.cancel();
+  ball.classList.add('in-bin');
+  const lx = ex - bx, ly = ey - by;
+  ball.style.transform = tf(lx, ly, spin, end);
+  bin.slot.appendChild(ball);
   await ball.animate([
-    { transform: tf(ex, ey, spin, end) },
-    { transform: tf(ex, ey + 46, spin + 40, end) },
-  ], { duration: 200, easing: 'cubic-bezier(.5,0,1,1)', fill: 'forwards' }).finished.catch(() => {});
+    { transform: tf(lx, ly, spin, end) },
+    { transform: tf(lx, ly + 50, spin + 40, end) },
+  ], { duration: 210, easing: 'cubic-bezier(.5,0,1,1)', fill: 'forwards' }).finished.catch(() => {});
+  ball.classList.add('sunk');            // seen through the frosted body
   Sound.thunk();
-  const inBin = tf(ex, ey + 46, spin + 40, end);
-  await bin.front.animate([
-    { transform: 'rotate(0)' }, { transform: 'rotate(-4deg)' }, { transform: 'rotate(3deg)' }, { transform: 'rotate(-1.5deg)' }, { transform: 'rotate(0)' },
-  ], { duration: 420, easing: 'ease-out' }).finished.catch(() => {});
-  bin.back.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(-4deg)' }, { transform: 'rotate(3deg)' }, { transform: 'rotate(0)' }], { duration: 420 });
-  // 5) bin leaves
-  await sleep(180);
-  const out = { duration: 380, easing: 'cubic-bezier(.5,0,.8,.4)', fill: 'forwards' };
-  ball.animate([{ transform: inBin, opacity: 1 }, { transform: `translateY(170px) ${inBin}`, opacity: 0 }], out);   // the ball rides out inside the bin
-  await Promise.all([bin.back, bin.front].map((p) => p.animate([{ transform: 'translateY(0)', opacity: 1 }, { transform: 'translateY(170px)', opacity: 0 }], out).finished.catch(() => {})));
-  ball.remove();
-  bin.back.remove(); bin.front.remove();
+  // 5) the whole bin wobbles as one piece, then leaves
+  await bin.el.animate([
+    { transform: 'rotate(0)' }, { transform: 'rotate(-4.5deg)' }, { transform: 'rotate(3.2deg)' }, { transform: 'rotate(-1.6deg)' }, { transform: 'rotate(.6deg)' }, { transform: 'rotate(0)' },
+  ], { duration: 520, easing: 'ease-out', composite: 'add' }).finished.catch(() => {});
+  await sleep(140);
+  await bin.el.animate([{ transform: 'translateY(0)', opacity: 1 }, { transform: 'translateY(180px)', opacity: 0 }], { duration: 380, easing: 'cubic-bezier(.5,0,.8,.4)', fill: 'forwards' }).finished.catch(() => {});
+  bin.el.remove();
 }
 
 export function resetImage(img) {

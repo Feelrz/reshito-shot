@@ -29,7 +29,7 @@ Angka split-flap di kanan atas menghitung **semua print dari semua pengunjung** 
 - Kalau layanan counter tidak bisa dihubungi, flap tetap jalan dan menghitung print lokal.
 
 ## Dark mode
-Tombol ◐ di kanan atas (di HP ada di bawah, sebelah tombol suara). Default mengikuti setting sistem, dan pilihan terakhir diingat. Di dark mode, preview kamera diberi alas kertas supaya tetap terlihat seperti hasil print.
+Tombol ◐ di kanan atas (di HP ada di bawah, sebelah tombol suara). Default **light**; dark hanya kalau dipilih, dan pilihan terakhir diingat. Di dark mode, preview kamera diberi alas kertas supaya tetap terlihat seperti hasil print.
 
 ## Jalankan lokal
 Kamera hanya jalan di HTTPS atau `localhost`.
